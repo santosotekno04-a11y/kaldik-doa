@@ -133,6 +133,18 @@ function getUnitColor(unitName: string | undefined): string {
   return colors[unitName || ''] || 'bg-indigo-100 text-indigo-800 border-indigo-200';
 }
 
+function getUnitDotColor(unitName: string | undefined): string {
+  const colors: Record<string, string> = {
+    'SD': 'bg-blue-500',
+    'SMP': 'bg-purple-500',
+    'TK': 'bg-rose-500',
+    'TBI': 'bg-teal-500',
+    'Manajemen': 'bg-emerald-500',
+    'Universal': 'bg-gray-500',
+  };
+  return colors[unitName || ''] || 'bg-indigo-500';
+}
+
 function isHoliday(day: number | null, month: number, year: number, holidays: Set<string>): boolean {
   if (!day) return false;
   const date = new Date(year, month, day);
@@ -238,6 +250,7 @@ export default function KaldikPage() {
   const [selectedDay, setSelectedDay] = useState<{ day: number; events: KaldikWithUnit[] } | null>(null);
   const [showMonthPicker, setShowMonthPicker] = useState(false);
   const [calendarUnitFilter, setCalendarUnitFilter] = useState<string | null>(null);
+  const [showMobileFilters, setShowMobileFilters] = useState(false);
 
   // ── Duplicate Detection State ─────────────────────────────
   const [duplicates, setDuplicates] = useState<Map<string, KaldikWithUnit[]>>(new Map());
@@ -841,88 +854,213 @@ export default function KaldikPage() {
         }
       />
 
-      {/* Filters */}
-      <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
-        <div className="flex flex-col sm:flex-row gap-3">
-          <SearchBar
-            value={search}
-            onChange={setSearch}
-            placeholder="Cari nama kegiatan..."
-            className="sm:w-64"
-          />
-          <FilterBar
-            activeCount={activeFilterCount}
-            onClearAll={clearFilters}
-          >
-            <FilterSelect
-              value={tahunAjaran}
-              onChange={setTahunAjaran}
-              options={TAHUN_AJARAN_OPTIONS}
-              placeholder="Tahun Ajaran"
-            />
-            <FilterSelect
-              value={semesterFilter}
-              onChange={setSemesterFilter}
-              options={SEMESTER_OPTIONS}
-              placeholder="Semester"
-            />
-            <FilterSelect
-              value={bulanFilter}
-              onChange={setBulanFilter}
-              options={BULAN_OPTIONS}
-              placeholder="Bulan"
-            />
-            <FilterSelect
-              value={unitFilter}
-              onChange={setUnitFilter}
-              options={unitOptions}
-              placeholder="Unit"
-            />
-            <FilterSelect
-              value={statusFilter}
-              onChange={setStatusFilter}
-              options={STATUS_OPTIONS}
-              placeholder="Status"
-            />
-            <FilterSelect
-              value={kategoriFilter}
-              onChange={setKategoriFilter}
-              options={KATEGORI_OPTIONS}
-              placeholder="Kategori"
-            />
-          </FilterBar>
+      {/* Mobile Filter Toggle */}
+      <button
+        onClick={() => setShowMobileFilters(!showMobileFilters)}
+        className="lg:hidden flex items-center justify-between w-full bg-white rounded-xl border border-gray-200 px-4 py-3"
+      >
+        <span className="text-sm font-medium text-gray-700">Filter & Pencarian</span>
+        <div className="flex items-center gap-2">
+          {activeFilterCount > 0 && (
+            <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 text-[10px] font-bold">
+              {activeFilterCount}
+            </span>
+          )}
+          <span className="text-gray-400 text-xs">{showMobileFilters ? '▲' : '▼'}</span>
         </div>
-        {/* View Toggle */}
-        <div className="flex items-center justify-between border-t border-gray-100 pt-3">
-          <span className="text-xs text-gray-500 font-medium">Tampilan:</span>
-          <div className="flex items-center bg-gray-100 rounded-lg p-0.5">
+      </button>
+
+      {/* 3-Panel Grid Layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-[200px_1fr_300px] gap-0 lg:gap-4">
+
+        {/* ── Left Sidebar (Desktop Filters) ── */}
+        <div className="hidden lg:block">
+          <div className="bg-white rounded-xl border border-gray-200 p-3 space-y-3 sticky top-4">
+            {/* Search */}
+            <div>
+              <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-1 block">Cari</label>
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Nama kegiatan..."
+                className="w-full px-2.5 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+            </div>
+
+            {/* Tahun Ajaran */}
+            <div>
+              <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-1 block">Tahun Ajaran</label>
+              <select value={tahunAjaran} onChange={(e) => setTahunAjaran(e.target.value)} className="w-full px-2.5 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                {TAHUN_AJARAN_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </div>
+
+            {/* Semester */}
+            <div>
+              <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-1 block">Semester</label>
+              <select value={semesterFilter} onChange={(e) => setSemesterFilter(e.target.value)} className="w-full px-2.5 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <option value="">Semua</option>
+                {SEMESTER_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </div>
+
+            {/* Bulan */}
+            <div>
+              <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-1 block">Bulan</label>
+              <select value={bulanFilter} onChange={(e) => setBulanFilter(e.target.value)} className="w-full px-2.5 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <option value="">Semua</option>
+                {BULAN_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </div>
+
+            {/* Unit Filter Chips */}
+            <div>
+              <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-1.5 block">Unit</label>
+              <div className="flex flex-wrap gap-1">
+                <button onClick={() => setUnitFilter("")} className={cn("px-2 py-0.5 rounded-full text-[10px] font-medium border transition-colors", unitFilter === "" ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50")}>Semua</button>
+                {['Universal', 'TK', 'SD', 'SMP', 'Manajemen', 'TBI'].map((unitName) => (
+                  <button key={unitName} onClick={() => setUnitFilter(unitFilter === unitName ? "" : unitName)} className={cn("px-2 py-0.5 rounded-full text-[10px] font-medium border transition-colors", unitFilter === unitName ? getUnitColor(unitName) : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50")}>{unitName}</button>
+                ))}
+              </div>
+            </div>
+
+            {/* Status */}
+            <div>
+              <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-1 block">Status</label>
+              <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-full px-2.5 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <option value="">Semua</option>
+                {STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </div>
+
+            {/* Kategori */}
+            <div>
+              <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-1 block">Kategori</label>
+              <select value={kategoriFilter} onChange={(e) => setKategoriFilter(e.target.value)} className="w-full px-2.5 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <option value="">Semua</option>
+                {KATEGORI_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </div>
+
+            {/* View Toggle */}
+            <div>
+              <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-1.5 block">Tampilan</label>
+              <div className="flex items-center bg-gray-100 rounded-lg p-0.5">
+                <button onClick={() => setViewMode("table")} className={cn("inline-flex items-center gap-1 flex-1 justify-center px-2 py-1.5 text-[10px] font-medium rounded-md transition-all", viewMode === "table" ? "bg-white text-indigo-700 shadow-sm" : "text-gray-500 hover:text-gray-700")}>
+                  <List size={12} /><span>Tabel</span>
+                </button>
+                <button onClick={() => setViewMode("calendar")} className={cn("inline-flex items-center gap-1 flex-1 justify-center px-2 py-1.5 text-[10px] font-medium rounded-md transition-all", viewMode === "calendar" ? "bg-white text-indigo-700 shadow-sm" : "text-gray-500 hover:text-gray-700")}>
+                  <CalendarDays size={12} /><span>Kalender</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Clear Filters */}
+            {activeFilterCount > 0 && (
+              <button onClick={clearFilters} className="w-full text-[10px] text-indigo-600 hover:text-indigo-800 font-medium py-1">
+                ✕ Hapus filter ({activeFilterCount})
+              </button>
+            )}
+
+            {/* Tambah Agenda */}
             <button
-              onClick={() => setViewMode("table")}
-              className={cn(
-                "inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-all",
-                viewMode === "table"
-                  ? "bg-white text-indigo-700 shadow-sm"
-                  : "text-gray-500 hover:text-gray-700"
-              )}
+              onClick={openCreateForm}
+              className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors shadow-sm"
             >
-              <List size={14} />
-              <span className="hidden sm:inline">Tabel</span>
-            </button>
-            <button
-              onClick={() => setViewMode("calendar")}
-              className={cn(
-                "inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-all",
-                viewMode === "calendar"
-                  ? "bg-white text-indigo-700 shadow-sm"
-                  : "text-gray-500 hover:text-gray-700"
-              )}
-            >
-              <CalendarDays size={14} />
-              <span className="hidden sm:inline">Kalender</span>
+              <Plus size={14} />
+              Tambah Agenda
             </button>
           </div>
         </div>
-      </div>
+
+        {/* ── Mobile Collapsible Filters ── */}
+        {showMobileFilters && (
+          <div className="lg:hidden bg-white rounded-xl border border-gray-200 p-4 space-y-3">
+            <div className="flex flex-col sm:flex-row gap-3">
+              <SearchBar
+                value={search}
+                onChange={setSearch}
+                placeholder="Cari nama kegiatan..."
+                className="sm:w-64"
+              />
+              <FilterBar
+                activeCount={activeFilterCount}
+                onClearAll={clearFilters}
+              >
+                <FilterSelect
+                  value={tahunAjaran}
+                  onChange={setTahunAjaran}
+                  options={TAHUN_AJARAN_OPTIONS}
+                  placeholder="Tahun Ajaran"
+                />
+                <FilterSelect
+                  value={semesterFilter}
+                  onChange={setSemesterFilter}
+                  options={SEMESTER_OPTIONS}
+                  placeholder="Semester"
+                />
+                <FilterSelect
+                  value={bulanFilter}
+                  onChange={setBulanFilter}
+                  options={BULAN_OPTIONS}
+                  placeholder="Bulan"
+                />
+                <FilterSelect
+                  value={unitFilter}
+                  onChange={setUnitFilter}
+                  options={unitOptions}
+                  placeholder="Unit"
+                />
+                <FilterSelect
+                  value={statusFilter}
+                  onChange={setStatusFilter}
+                  options={STATUS_OPTIONS}
+                  placeholder="Status"
+                />
+                <FilterSelect
+                  value={kategoriFilter}
+                  onChange={setKategoriFilter}
+                  options={KATEGORI_OPTIONS}
+                  placeholder="Kategori"
+                />
+              </FilterBar>
+            </div>
+            {/* View Toggle */}
+            <div className="flex items-center justify-between border-t border-gray-100 pt-3">
+              <span className="text-xs text-gray-500 font-medium">Tampilan:</span>
+              <div className="flex items-center bg-gray-100 rounded-lg p-0.5">
+                <button
+                  onClick={() => setViewMode("table")}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-all",
+                    viewMode === "table"
+                      ? "bg-white text-indigo-700 shadow-sm"
+                      : "text-gray-500 hover:text-gray-700"
+                  )}
+                >
+                  <List size={14} />
+                  <span className="hidden sm:inline">Tabel</span>
+                </button>
+                <button
+                  onClick={() => setViewMode("calendar")}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-all",
+                    viewMode === "calendar"
+                      ? "bg-white text-indigo-700 shadow-sm"
+                      : "text-gray-500 hover:text-gray-700"
+                  )}
+                >
+                  <CalendarDays size={14} />
+                  <span className="hidden sm:inline">Kalender</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Center Panel ── */}
+        <div className="min-w-0">
 
       {/* Bulk Action Bar */}
       {selectedIds.length > 0 && (
@@ -1137,8 +1275,8 @@ export default function KaldikPage() {
               </div>
 
               {/* Calendar Grid */}
-              <div className="overflow-x-auto">
-              <div className="grid grid-cols-7 min-w-[320px]">
+              <div className="w-full overflow-hidden">
+              <div className="grid grid-cols-7 w-full" style={{ tableLayout: 'fixed' }}>
                 {/* Day Headers */}
                 {CAL_DAY_HEADERS.map((day, dayIdx) => (
                   <div
@@ -1174,8 +1312,6 @@ export default function KaldikPage() {
                     calMonth === today.getMonth() &&
                     calYear === today.getFullYear();
                   const dayIsHoliday = isHoliday(day, calMonth, calYear, holidays);
-                  const expandKey = dateStr;
-                  const isExpanded = expandedDay === expandKey;
 
                   return (
                     <div
@@ -1186,7 +1322,7 @@ export default function KaldikPage() {
                         }
                       }}
                       className={cn(
-                        "min-h-[90px] sm:min-h-[110px] border-b border-r border-gray-100 p-1 sm:p-1.5 transition-colors min-w-0 overflow-hidden",
+                        "min-h-[60px] sm:min-h-[110px] border-b border-r border-gray-100 p-0.5 sm:p-1.5 transition-colors min-w-0 overflow-hidden",
                         !day && "bg-gray-50/50",
                         day && dayIsHoliday && "bg-red-50",
                         day && !dayIsHoliday && "hover:bg-gray-50/80",
@@ -1211,11 +1347,6 @@ export default function KaldikPage() {
                             >
                               {day}
                             </span>
-                            {dayEvents.length > 0 && (
-                              <span className="sm:hidden text-[10px] text-gray-400 font-medium">
-                                {dayEvents.length}
-                              </span>
-                            )}
                           </div>
 
                           {/* Desktop: Show pills (merged for duplicates) */}
@@ -1257,53 +1388,29 @@ export default function KaldikPage() {
                             })()}
                           </div>
 
-                          {/* Mobile: Show count, click to expand */}
+                          {/* Mobile: Show colored dots */}
                           <div className="sm:hidden">
-                            {dayEvents.length > 0 && !isExpanded && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setExpandedDay(expandKey);
-                                }}
-                                className="w-full text-center mt-0.5 px-1 py-0.5 rounded text-[10px] font-medium bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors"
-                              >
-                                {dayEvents.length} kegiatan
-                              </button>
-                            )}
-                            {isExpanded && (
-                              <div className="mt-0.5 space-y-0.5">
-                                {(() => {
-                                  const grouped = groupCalendarEvents(dayEvents);
-                                  return grouped.map((disp) => (
-                                    <div
-                                      key={disp.key}
-                                      className={cn(
-                                        "w-full text-left px-1 py-0.5 rounded text-[10px] font-medium truncate border min-w-0",
-                                        disp.isMerged
-                                          ? "bg-indigo-50 text-indigo-800 border-indigo-200"
-                                          : getUnitColor(disp.unitNames[0])
-                                      )}
-                                    >
-                                      <span className="truncate">{disp.nama_kegiatan.length > 13
-                                        ? disp.nama_kegiatan.slice(0, 13) + "..."
-                                        : disp.nama_kegiatan}</span>
-                                      {disp.isMerged && (
-                                        <span className="ml-0.5 text-[9px] font-semibold opacity-70">
-                                          x{disp.events.length}
-                                        </span>
-                                      )}
-                                    </div>
-                                  ));
-                                })()}
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setExpandedDay(null);
-                                  }}
-                                  className="w-full text-center text-[10px] text-gray-400 hover:text-gray-600"
-                                >
-                                  Tutup
-                                </button>
+                            {dayEvents.length > 0 && (
+                              <div className="flex flex-wrap gap-0.5 mt-0.5 justify-center">
+                                {dayEvents.slice(0, 5).map((evt) => (
+                                  <span
+                                    key={evt.id}
+                                    className={cn(
+                                      "w-2.5 h-2.5 rounded-full shrink-0",
+                                      getUnitDotColor(evt.unit?.name)
+                                    )}
+                                    title={evt.nama_kegiatan + ' (' + (evt.unit?.name || '-') + ')'}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSelectedDay({ day: day!, events: dayEvents });
+                                    }}
+                                  />
+                                ))}
+                                {dayEvents.length > 5 && (
+                                  <span className="text-[8px] text-gray-400 font-medium leading-none self-center">
+                                    {dayEvents.length - 5}+
+                                  </span>
+                                )}
                               </div>
                             )}
                           </div>
@@ -1336,6 +1443,79 @@ export default function KaldikPage() {
           )}
         </div>
       )}
+
+        </div>{/* Close Center Panel */}
+
+        {/* ── Right Detail Panel (Desktop lg+) ── */}
+        <div className="hidden lg:block">
+          <div className="bg-white rounded-xl border border-gray-200 sticky top-4 overflow-hidden">
+            {selectedDay ? (
+              <>
+                <div className="px-4 py-3 border-b border-gray-100 bg-gray-50/50">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-semibold text-gray-900">
+                      {selectedDay.day} {CAL_MONTH_NAMES[calMonth]} {calYear}
+                    </h3>
+                    <button
+                      onClick={() => setSelectedDay(null)}
+                      className="p-1 rounded text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+                    >
+                      <span className="text-xs">✕</span>
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-gray-400 mt-0.5">{selectedDay.events.length} kegiatan</p>
+                </div>
+                <div className="p-3 space-y-2 max-h-[calc(100vh-200px)] overflow-y-auto">
+                  {selectedDay.events.map((evt: KaldikWithUnit) => (
+                    <div
+                      key={evt.id}
+                      onClick={() => openEditForm(evt)}
+                      className="border border-gray-100 rounded-lg p-3 hover:bg-gray-50/80 hover:border-indigo-200 transition-colors cursor-pointer"
+                    >
+                      <p className="text-xs font-semibold text-gray-900 truncate">
+                        {evt.nama_kegiatan}
+                      </p>
+                      <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                        <span
+                          className={cn(
+                            "inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-medium border",
+                            getUnitColor(evt.unit?.name)
+                          )}
+                        >
+                          {evt.unit?.name || '-'}
+                        </span>
+                        <span className="text-[9px] text-gray-400">
+                          {evt.kategori}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-gray-500 mt-1">
+                        {evt.tanggal_mulai
+                          ? `${formatDateDisplay(evt.tanggal_mulai)}${evt.tanggal_selesai && evt.tanggal_selesai !== evt.tanggal_mulai ? ` — ${formatDateDisplay(evt.tanggal_selesai)}` : ''}`
+                          : evt.tanggal_mentah || '-'}
+                      </p>
+                      {evt.catatan_doa && (
+                        <p className="text-[10px] text-indigo-600 mt-1 italic truncate">
+                          🙏 {evt.catatan_doa}
+                        </p>
+                      )}
+                      <div className="mt-1.5">
+                        <StatusBadge status={evt.status} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
+                <CalendarDays size={32} className="text-gray-300 mb-3" />
+                <p className="text-xs text-gray-400 font-medium">Pilih tanggal untuk melihat detail</p>
+                <p className="text-[10px] text-gray-300 mt-1">Klik hari pada kalender</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+      </div>{/* Close 3-Panel Grid */}
 
       {/* Add/Edit Modal */}
       <Modal
@@ -1618,11 +1798,11 @@ export default function KaldikPage() {
         </Modal>
       )}
 
-      {/* Day Detail Modal */}
+      {/* Day Detail Modal (Mobile/Tablet only - desktop uses right panel) */}
       {selectedDay && (
         <>
-          {/* Desktop: centered modal */}
-          <div className="hidden sm:flex fixed inset-0 z-50 items-center justify-center">
+          {/* Tablet: centered modal */}
+          <div className="hidden sm:flex lg:hidden fixed inset-0 z-50 items-center justify-center">
             <div
               className="absolute inset-0 bg-black/40"
               onClick={() => setSelectedDay(null)}
@@ -1683,7 +1863,7 @@ export default function KaldikPage() {
           </div>
 
           {/* Mobile: bottom sheet */}
-          <div className="sm:hidden fixed inset-0 z-50">
+          <div className="lg:hidden fixed inset-0 z-50">
             <div
               className="absolute inset-0 bg-black/40"
               onClick={() => setSelectedDay(null)}

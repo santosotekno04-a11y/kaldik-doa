@@ -37,6 +37,21 @@ function parseCSV(text: string): { headers: string[]; rows: string[][] } {
   return { headers: parseRow(lines[0]), rows: lines.slice(1).map(parseRow) };
 }
 
+function parseImportDate(text: string): string | null {
+  if (!text) return null;
+  const cleaned = text.trim();
+  // DD/MM/YYYY or DD-MM-YYYY
+  const match1 = cleaned.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if (match1) {
+    const [, d, m, y] = match1;
+    return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+  }
+  // YYYY-MM-DD
+  const match2 = cleaned.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (match2) return cleaned;
+  return null;
+}
+
 interface Unit {
   id: string;
   code: string;
@@ -99,7 +114,8 @@ export default function KaryawanPage() {
   const [csvRows, setCsvRows] = useState<string[][]>([]);
   const [headerMapping, setHeaderMapping] = useState<Record<string, string>>({});
   const [importing, setImporting] = useState(false);
-  const [importResult, setImportResult] = useState<{ success: number; error: number } | null>(null);
+  const [importResult, setImportResult] = useState<{ success: number; rejected: number; rejectedReasons: string[] } | null>(null);
+  const [rowValidationErrors, setRowValidationErrors] = useState<(string | null)[]>([]);
   const [showBulkEditModal, setShowBulkEditModal] = useState(false);
   const [bulkEditField, setBulkEditField] = useState('unit_id');
   const [bulkEditValue, setBulkEditValue] = useState('');
@@ -263,14 +279,24 @@ export default function KaryawanPage() {
     }
   };
 
-  const FIELD_MAP: Record<string, string> = {
-    'nama': 'nama', 'name': 'nama',
-    'unit': 'unit_id', 'unit_id': 'unit_id',
-    'jabatan': 'jabatan', 'position': 'jabatan',
-    'tanggal_lahir': 'tanggal_lahir', 'tgl lahir': 'tanggal_lahir', 'tanggal lahir': 'tanggal_lahir',
-    'tanggal_masuk': 'tanggal_masuk', 'tgl masuk': 'tanggal_masuk', 'tanggal masuk': 'tanggal_masuk',
-    'status': 'status',
-    'catatan': 'catatan', 'notes': 'catatan',
+  const KARYAWAN_IMPORT_MAP: Record<string, string> = {
+    'id karyawan': 'karyawan_id',
+    'id': 'karyawan_id',
+    'karyawan_id': 'karyawan_id',
+    'karyawan id': 'karyawan_id',
+    'nama lengkap': 'nama',
+    'nama': 'nama',
+    'name': 'nama',
+    'full name': 'nama',
+    'nama panggilan': 'nama_panggilan',
+    'panggilan': 'nama_panggilan',
+    'nickname': 'nama_panggilan',
+    'tanggal lahir': 'tanggal_lahir',
+    'tgl lahir': 'tanggal_lahir',
+    'tgl_lahir': 'tanggal_lahir',
+    'date of birth': 'tanggal_lahir',
+    'dob': 'tanggal_lahir',
+    'lahir': 'tanggal_lahir',
   };
 
   const openImportModal = () => {
@@ -279,27 +305,51 @@ export default function KaryawanPage() {
     setCsvRows([]);
     setHeaderMapping({});
     setImportResult(null);
+    setRowValidationErrors([]);
     setShowImportModal(true);
   };
 
   const handleCsvParse = (text: string) => {
     setCsvText(text);
+    setImportResult(null);
     if (!text.trim()) {
       setCsvHeaders([]);
       setCsvRows([]);
       setHeaderMapping({});
+      setRowValidationErrors([]);
       return;
     }
     const { headers, rows } = parseCSV(text);
     setCsvHeaders(headers);
     setCsvRows(rows);
-    // Auto-detect mapping
+    // Auto-detect mapping using strict KARYAWAN_IMPORT_MAP
     const mapping: Record<string, string> = {};
     headers.forEach(h => {
       const lower = h.toLowerCase().trim();
-      if (FIELD_MAP[lower]) mapping[h] = FIELD_MAP[lower];
+      if (KARYAWAN_IMPORT_MAP[lower]) mapping[h] = KARYAWAN_IMPORT_MAP[lower];
     });
     setHeaderMapping(mapping);
+
+    // Validate each row
+    const errors: (string | null)[] = rows.map(row => {
+      const fieldValues: Record<string, string> = {};
+      headers.forEach((header, idx) => {
+        const field = mapping[header];
+        if (field && idx < row.length) {
+          fieldValues[field] = row[idx]?.trim() || '';
+        }
+      });
+      const issues: string[] = [];
+      if (!fieldValues['karyawan_id']) issues.push('ID Karyawan kosong');
+      if (!fieldValues['nama']) issues.push('Nama kosong');
+      if (!fieldValues['tanggal_lahir']) {
+        issues.push('Tanggal lahir kosong');
+      } else if (!parseImportDate(fieldValues['tanggal_lahir'])) {
+        issues.push('Tanggal lahir tidak valid');
+      }
+      return issues.length > 0 ? issues.join(', ') : null;
+    });
+    setRowValidationErrors(errors);
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -318,35 +368,51 @@ export default function KaryawanPage() {
     if (csvRows.length === 0) return;
     setImporting(true);
     let success = 0;
-    let errorCount = 0;
-    const unitNameMap = new Map(units.map(u => [u.name.toLowerCase(), u.id]));
+    let rejected = 0;
+    const rejectedReasons: string[] = [];
 
-    for (const row of csvRows) {
+    for (let i = 0; i < csvRows.length; i++) {
+      // Skip rows that failed validation
+      if (rowValidationErrors[i]) {
+        rejected++;
+        rejectedReasons.push(`Baris ${i + 2}: ${rowValidationErrors[i]}`);
+        continue;
+      }
+
+      const row = csvRows[i];
       try {
-        const payload: Record<string, unknown> = { karyawan_id: `KRY-${Date.now()}-${success}` };
+        const fieldValues: Record<string, string> = {};
         csvHeaders.forEach((header, idx) => {
           const field = headerMapping[header];
-          if (!field || idx >= row.length) return;
-          const val = row[idx];
-          if (field === 'unit_id') {
-            payload.unit_id = unitNameMap.get(val.toLowerCase()) || null;
-          } else {
-            payload[field] = val || null;
+          if (field && idx < row.length) {
+            fieldValues[field] = row[idx]?.trim() || '';
           }
         });
-        if (!payload.nama) { errorCount++; continue; }
-        if (!payload.status) payload.status = 'Aktif';
-        if (payload.tanggal_lahir) {
-          payload.bulan_lahir = new Date(payload.tanggal_lahir + 'T00:00:00').getMonth() + 1;
-        }
+
+        const tanggal_lahir = parseImportDate(fieldValues['tanggal_lahir']);
+        const bulan_lahir = tanggal_lahir
+          ? new Date(tanggal_lahir + 'T00:00:00').getMonth() + 1
+          : null;
+
+        const payload: Record<string, unknown> = {
+          karyawan_id: fieldValues['karyawan_id'] || `KRY-${Date.now()}-${success}`,
+          nama: fieldValues['nama'],
+          nama_panggilan: fieldValues['nama_panggilan'] || null,
+          tanggal_lahir,
+          bulan_lahir,
+          status: 'Aktif',
+          sumber_data: 'Import',
+        };
+
         const { error } = await supabase.from('karyawan').insert(payload);
         if (error) throw error;
         success++;
       } catch {
-        errorCount++;
+        rejected++;
+        rejectedReasons.push(`Baris ${i + 2}: Gagal menyimpan ke database`);
       }
     }
-    setImportResult({ success, error: errorCount });
+    setImportResult({ success, rejected, rejectedReasons });
     setImporting(false);
     if (success > 0) fetchData();
   };
@@ -719,19 +785,22 @@ export default function KaryawanPage() {
       <Modal
         open={showImportModal}
         onClose={() => setShowImportModal(false)}
-        title="Import CSV"
+        title="Import Data Karyawan"
         size="xl"
       >
         <div className="space-y-4">
           <div>
+            <p className="text-sm text-gray-500 mb-2">
+              Format CSV: ID Karyawan, Nama Lengkap, Nama Panggilan (opsional), Tanggal Lahir (DD/MM/YYYY)
+            </p>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Tempel konten CSV atau upload file
             </label>
             <textarea
               value={csvText}
               onChange={(e) => handleCsvParse(e.target.value)}
-              placeholder="Tempel data CSV di sini..."
-              className="w-full h-32 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-none"
+              placeholder={`KRY-001,John Doe,John,15/03/1990\nKRY-002,Jane Smith,Jane,22/07/1985`}
+              className="w-full h-32 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-none font-mono"
             />
             <div className="mt-2">
               <label className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 cursor-pointer transition-colors">
@@ -762,13 +831,10 @@ export default function KaryawanPage() {
                         className="flex-1 px-2 py-1 text-sm border border-gray-200 rounded-md"
                       >
                         <option value="">-- Abaikan --</option>
-                        <option value="nama">Nama</option>
-                        <option value="unit_id">Unit</option>
-                        <option value="jabatan">Jabatan</option>
+                        <option value="karyawan_id">ID Karyawan</option>
+                        <option value="nama">Nama Lengkap</option>
+                        <option value="nama_panggilan">Nama Panggilan</option>
                         <option value="tanggal_lahir">Tanggal Lahir</option>
-                        <option value="tanggal_masuk">Tanggal Masuk</option>
-                        <option value="status">Status</option>
-                        <option value="catatan">Catatan</option>
                       </select>
                     </div>
                   ))}
@@ -777,12 +843,13 @@ export default function KaryawanPage() {
 
               <div>
                 <h4 className="text-sm font-medium text-gray-700 mb-2">
-                  Preview ({csvRows.length} baris)
+                  Preview ({csvRows.length} baris, {rowValidationErrors.filter(e => !e).length} valid, {rowValidationErrors.filter(e => e).length} ditolak)
                 </h4>
-                <div className="overflow-x-auto border border-gray-200 rounded-lg max-h-48">
+                <div className="overflow-x-auto border border-gray-200 rounded-lg max-h-60">
                   <table className="w-full text-xs">
                     <thead>
                       <tr className="bg-gray-50">
+                        <th className="px-2 py-1.5 text-left font-medium text-gray-500 w-8">#</th>
                         {csvHeaders.map((h) => (
                           <th key={h} className="px-2 py-1.5 text-left font-medium text-gray-500">
                             {h}
@@ -791,21 +858,33 @@ export default function KaryawanPage() {
                             )}
                           </th>
                         ))}
+                        <th className="px-2 py-1.5 text-left font-medium text-gray-500">Status</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {csvRows.slice(0, 10).map((row, i) => (
-                        <tr key={i}>
-                          {row.map((cell, j) => (
-                            <td key={j} className="px-2 py-1 text-gray-600 max-w-[120px] truncate">
-                              {cell}
+                      {csvRows.slice(0, 10).map((row, i) => {
+                        const error = rowValidationErrors[i];
+                        return (
+                          <tr key={i} className={error ? 'bg-red-50' : 'bg-emerald-50'}>
+                            <td className="px-2 py-1 text-gray-400">{i + 2}</td>
+                            {row.map((cell, j) => (
+                              <td key={j} className="px-2 py-1 text-gray-600 max-w-[120px] truncate">
+                                {cell}
+                              </td>
+                            ))}
+                            <td className="px-2 py-1">
+                              {error ? (
+                                <span className="text-red-600 font-medium">{error}</span>
+                              ) : (
+                                <span className="text-emerald-600 font-medium">Valid</span>
+                              )}
                             </td>
-                          ))}
-                        </tr>
-                      ))}
+                          </tr>
+                        );
+                      })}
                       {csvRows.length > 10 && (
                         <tr>
-                          <td colSpan={csvHeaders.length} className="px-2 py-1 text-center text-gray-400">
+                          <td colSpan={csvHeaders.length + 2} className="px-2 py-1 text-center text-gray-400">
                             ... dan {csvRows.length - 10} baris lainnya
                           </td>
                         </tr>
@@ -818,8 +897,20 @@ export default function KaryawanPage() {
           )}
 
           {importResult && (
-            <div className={`p-3 rounded-lg text-sm ${importResult.error > 0 ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'}`}>
-              Import selesai: {importResult.success} berhasil, {importResult.error} gagal
+            <div className="space-y-2">
+              <div className={`p-3 rounded-lg text-sm ${importResult.rejected > 0 ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'}`}>
+                {importResult.success} baris berhasil diimport, {importResult.rejected} baris ditolak
+              </div>
+              {importResult.rejectedReasons.length > 0 && (
+                <div className="p-3 rounded-lg text-xs bg-red-50 text-red-700 border border-red-200 max-h-32 overflow-y-auto">
+                  <p className="font-medium mb-1">Alasan ditolak:</p>
+                  <ul className="list-disc list-inside space-y-0.5">
+                    {importResult.rejectedReasons.map((reason, i) => (
+                      <li key={i}>{reason}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
           )}
 
@@ -833,10 +924,10 @@ export default function KaryawanPage() {
             {csvRows.length > 0 && !importResult && (
               <button
                 onClick={handleImport}
-                disabled={importing}
+                disabled={importing || rowValidationErrors.every(e => e !== null)}
                 className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50"
               >
-                {importing ? 'Mengimpor...' : `Import ${csvRows.length} Baris`}
+                {importing ? 'Mengimpor...' : `Import ${rowValidationErrors.filter(e => !e).length} Baris Valid`}
               </button>
             )}
           </div>
