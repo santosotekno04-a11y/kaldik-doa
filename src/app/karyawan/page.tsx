@@ -17,6 +17,16 @@ const BULAN_NAMES = [
   'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
 ];
 
+function getErrorMessage(err: unknown): string {
+  if (err instanceof Error) {
+    return err.message;
+  }
+  if (typeof err === 'object' && err !== null && 'message' in err) {
+    return String((err as any).message);
+  }
+  return String(err);
+}
+
 function parseCSV(text: string): { headers: string[]; rows: string[][] } {
   // Remove BOM and normalize line endings
   const cleaned = text.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
@@ -484,7 +494,7 @@ export default function KaryawanPage() {
           const { error } = await supabase.from('karyawan').insert(fullPayload);
           if (error) throw error;
         } catch (fullErr: unknown) {
-          const errMsg = fullErr instanceof Error ? fullErr.message : String(fullErr);
+          const errMsg = getErrorMessage(fullErr);
           // If error is about missing column, retry with base payload
           if (errMsg.includes('column') || errMsg.includes('schema') || errMsg.includes('Could not find')) {
             const { error: baseErr } = await supabase.from('karyawan').insert(basePayload);
@@ -492,7 +502,7 @@ export default function KaryawanPage() {
               insertError = baseErr;
             }
           } else {
-            insertError = fullErr instanceof Error ? fullErr : new Error(errMsg);
+            insertError = { message: errMsg };
           }
         }
 
@@ -500,7 +510,7 @@ export default function KaryawanPage() {
         success++;
       } catch (err: unknown) {
         rejected++;
-        const errMsg = err instanceof Error ? err.message : String(err);
+        const errMsg = getErrorMessage(err);
         rejectedReasons.push(`Baris ${i + 2}: ${errMsg || 'Gagal menyimpan ke database'}`);
       }
     }
