@@ -128,6 +128,33 @@ export default function KaryawanPage() {
   const [bulkEditLoading, setBulkEditLoading] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
 
+  // Re-validate rows when headerMapping changes (e.g. user changes dropdown)
+  useEffect(() => {
+    if (csvRows.length === 0 || csvHeaders.length === 0) return;
+    if (Object.keys(headerMapping).length === 0) return;
+
+    const errors: (string | null)[] = csvRows.map(row => {
+      const fieldValues: Record<string, string> = {};
+      csvHeaders.forEach((header, idx) => {
+        const field = headerMapping[header];
+        if (field && idx < row.length) {
+          fieldValues[field] = row[idx]?.trim() || '';
+        }
+      });
+      const issues: string[] = [];
+      if (!fieldValues['karyawan_id']) issues.push('ID Karyawan kosong');
+      if (!fieldValues['nama']) issues.push('Nama kosong');
+      if (!fieldValues['tanggal_lahir']) {
+        issues.push('Tanggal lahir kosong');
+      } else if (!parseImportDate(fieldValues['tanggal_lahir'])) {
+        issues.push('Tanggal lahir tidak valid');
+      }
+      return issues.length > 0 ? issues.join(', ') : null;
+    });
+    setRowValidationErrors(errors);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [headerMapping]);
+
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
@@ -290,19 +317,35 @@ export default function KaryawanPage() {
     'id': 'karyawan_id',
     'karyawan_id': 'karyawan_id',
     'karyawan id': 'karyawan_id',
+    'karyawanid': 'karyawan_id',
+    'karyawan-id': 'karyawan_id',
     'nama lengkap': 'nama',
     'nama': 'nama',
     'name': 'nama',
     'full name': 'nama',
+    'fullname': 'nama',
+    'namalengkap': 'nama',
+    'nama-lengkap': 'nama',
+    'nama_panggilan': 'nama_panggilan',
     'nama panggilan': 'nama_panggilan',
+    'namapanggilan': 'nama_panggilan',
+    'nama-panggilan': 'nama_panggilan',
     'panggilan': 'nama_panggilan',
     'nickname': 'nama_panggilan',
+    'tanggal_lahir': 'tanggal_lahir',
     'tanggal lahir': 'tanggal_lahir',
-    'tgl lahir': 'tanggal_lahir',
+    'tanggallahir': 'tanggal_lahir',
+    'tanggal-lahir': 'tanggal_lahir',
     'tgl_lahir': 'tanggal_lahir',
+    'tgl lahir': 'tanggal_lahir',
+    'tgllahir': 'tanggal_lahir',
+    'tgl-lahir': 'tanggal_lahir',
     'date of birth': 'tanggal_lahir',
+    'dateofbirth': 'tanggal_lahir',
     'dob': 'tanggal_lahir',
     'lahir': 'tanggal_lahir',
+    'birth date': 'tanggal_lahir',
+    'birthdate': 'tanggal_lahir',
   };
 
   const openImportModal = () => {
@@ -329,12 +372,31 @@ export default function KaryawanPage() {
     setCsvHeaders(headers);
     setCsvRows(rows);
     // Auto-detect mapping using strict KARYAWAN_IMPORT_MAP
-    // Normalize headers: lowercase, trim, replace non-breaking spaces
-    const normalizeHeader = (h: string) => h.toLowerCase().trim().replace(/\u00A0/g, ' ').replace(/\s+/g, ' ');
+    // Normalize headers: lowercase, trim, replace non-breaking spaces, split camelCase
+    const normalizeHeader = (h: string) => {
+      return h
+        .trim()
+        .replace(/\u00A0/g, ' ')
+        // Split camelCase/PascalCase: "KaryawanID" → "Karyawan ID"
+        .replace(/([a-z])([A-Z])/g, '$1 $2')
+        .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
+        .toLowerCase()
+        .replace(/[\s\-_]+/g, ' ')
+        .trim();
+    };
     const mapping: Record<string, string> = {};
     headers.forEach(h => {
       const normalized = normalizeHeader(h);
-      if (KARYAWAN_IMPORT_MAP[normalized]) mapping[h] = KARYAWAN_IMPORT_MAP[normalized];
+      // Try exact match first, then try with spaces replaced
+      if (KARYAWAN_IMPORT_MAP[normalized]) {
+        mapping[h] = KARYAWAN_IMPORT_MAP[normalized];
+      } else {
+        // Try without spaces: "karyawan id" → "karyawanid"
+        const noSpace = normalized.replace(/\s/g, '');
+        if (KARYAWAN_IMPORT_MAP[noSpace]) {
+          mapping[h] = KARYAWAN_IMPORT_MAP[noSpace];
+        }
+      }
     });
     setHeaderMapping(mapping);
 
