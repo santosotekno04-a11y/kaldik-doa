@@ -5,7 +5,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Building2, CalendarClock,
   ChevronRight, ArrowRight, Clock, Loader2,
-  Church, Heart, BookOpen,
+  Church, BookOpen, Cake,
 } from 'lucide-react';
 import { cn } from '@/lib/utils/cn';
 import { supabase } from '@/lib/supabase/client';
@@ -84,6 +84,15 @@ interface JadwalItem {
   bulan: string;
 }
 
+interface HMItem {
+  id: string;
+  tanggal: string;
+  pelayan_holy_morning: string;
+  tema_bulanan: string;
+  nas_alkitab: string;
+  bulan: string;
+}
+
 interface PortalItem {
   sheetName: string;
   row: number;
@@ -98,11 +107,22 @@ interface PortalItem {
   status: string;
 }
 
+interface BirthdayItem {
+  id: string;
+  nama: string;
+  tanggal_lahir: string;
+  jabatan: string | null;
+  unit?: { name: string; color: string } | null;
+}
+
 export default function DashboardPage() {
   const [jadwalList, setJadwalList] = useState<JadwalItem[]>([]);
   const [portalList, setPortalList] = useState<PortalItem[]>([]);
   const [agendaTerdekat, setAgendaTerdekat] = useState<AgendaItem[]>([]);
+  const [birthdayList, setBirthdayList] = useState<BirthdayItem[]>([]);
+  const [hmList, setHmList] = useState<HMItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [jadwalTab, setJadwalTab] = useState<'ibadah' | 'holy_morning'>('ibadah');
 
   const { todayStr, in7Days, bulan, tahun } = useMemo(() => {
     const n = new Date();
@@ -123,6 +143,8 @@ export default function DashboardPage() {
       const [
         jadwalRes,
         agendaTerdekatRes,
+        hmRes,
+        birthdayRes,
       ] = await Promise.all([
         supabase
           .from('jadwal_ibadah')
@@ -138,10 +160,35 @@ export default function DashboardPage() {
           .neq('status', 'Dibatalkan')
           .order('tanggal_mulai', { ascending: true })
           .limit(10),
+        supabase
+          .from('holy_morning')
+          .select('id, tanggal, pelayan_holy_morning, tema_bulanan, tema_mingguan, nas_alkitab, bulan')
+          .eq('tahun_ajaran', '2026-2027')
+          .order('tanggal_sort', { ascending: true, nullsFirst: false })
+          .limit(10),
+        supabase
+          .from('karyawan')
+          .select('id, nama, tanggal_lahir, jabatan, unit:units(name, color)')
+          .eq('status', 'Aktif')
+          .not('tanggal_lahir', 'is', null),
       ]);
 
       setJadwalList((jadwalRes.data || []) as unknown as JadwalItem[]);
       setAgendaTerdekat((agendaTerdekatRes.data || []) as unknown as AgendaItem[]);
+      setHmList((hmRes.data || []) as unknown as HMItem[]);
+
+      // Filter birthday for current month
+      const allBirthdays = (birthdayRes.data || []) as unknown as BirthdayItem[];
+      const monthBirthdays = allBirthdays.filter((k) => {
+        if (!k.tanggal_lahir) return false;
+        const parts = k.tanggal_lahir.split('-');
+        return parseInt(parts[1]) === bulan;
+      }).sort((a, b) => {
+        const dayA = parseInt(a.tanggal_lahir.split('-')[2]);
+        const dayB = parseInt(b.tanggal_lahir.split('-')[2]);
+        return dayA - dayB;
+      });
+      setBirthdayList(monthBirthdays);
 
       // Fetch portal data (non-blocking)
       try {
@@ -152,7 +199,6 @@ export default function DashboardPage() {
         });
         const portalData = await portalRes.json();
         if (portalData.data) {
-          // Filter only future/upcoming approved bookings
           const now = new Date();
           const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
           const futureData = portalData.data.filter((p: PortalItem) => {
@@ -184,6 +230,8 @@ export default function DashboardPage() {
   }, [todayStr, in7Days, bulan, tahun]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  const monthName = useMemo(() => getMonthName(bulan), [bulan]);
 
   if (loading) {
     return (
@@ -221,91 +269,123 @@ export default function DashboardPage() {
       </div>
 
       {/* ============================================================
-          3 Priority Widgets
+          Widget 1: Peminjaman Gereja (Portal)
           ============================================================ */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        {/* Widget: Agenda Terdekat */}
-        <div className="bg-white rounded-xl border border-slate-200 p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-7 h-7 rounded-lg bg-indigo-50 flex items-center justify-center">
-              <Clock className="w-3.5 h-3.5 text-indigo-600" />
-            </div>
-            <h3 className="text-xs font-semibold text-slate-700">Agenda 7 Hari ke Depan</h3>
+      <div className="bg-white rounded-xl border border-slate-200 p-4">
+        <Link href="/portal" className="flex items-center gap-2 mb-3 group">
+          <div className="w-7 h-7 rounded-lg bg-emerald-50 flex items-center justify-center">
+            <Church className="w-3.5 h-3.5 text-emerald-600" />
           </div>
-          {agendaTerdekat.length === 0 ? (
-            <p className="text-xs text-slate-400 py-2">Tidak ada agenda dalam 7 hari ke depan</p>
-          ) : (
-            <div className="space-y-2">
-              {agendaTerdekat.slice(0, 5).map((item) => (
-                <Link key={item.id} href="/kaldik" className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-slate-50 transition-colors group">
-                  <div className="flex-shrink-0 w-8 h-8 rounded-lg flex flex-col items-center justify-center" style={{ backgroundColor: item.unit?.color ? `${item.unit.color}15` : '#eef2ff' }}>
-                    <span className="text-[10px] font-bold" style={{ color: item.unit?.color || '#6366f1' }}>{item.tanggal_mulai?.split('-')[2]}</span>
-                    <span className="text-[8px]" style={{ color: item.unit?.color ? `${item.unit.color}80` : '#a5b4fc' }}>{getMonthName(parseInt(item.tanggal_mulai?.split('-')[1] || '0')).slice(0, 3)}</span>
+          <h3 className="text-xs font-semibold text-slate-700 group-hover:text-emerald-600 transition-colors">Peminjaman Gereja</h3>
+          <ChevronRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-emerald-500 ml-auto" />
+        </Link>
+        {portalList.filter(p => p.status === 'Approved').length === 0 ? (
+          <p className="text-xs text-slate-400 py-2">Tidak ada peminjaman mendatang</p>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+            {portalList.filter(p => p.status === 'Approved').slice(0, 6).map((item, idx) => (
+              <Link key={`${item.unit}-${item.row}-${idx}`} href="/portal" className="flex items-center gap-2.5 p-2.5 rounded-lg border border-slate-100 hover:bg-emerald-50/50 hover:border-emerald-200 transition-colors group">
+                <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center">
+                  <Building2 className="w-3.5 h-3.5 text-emerald-600" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-medium text-slate-900 truncate">{item.acara}</p>
+                  <p className="text-[10px] text-slate-400 truncate">{item.tanggalDisplay || item.tanggal} · {item.jam}</p>
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ============================================================
+          Widget 2: Ulang Tahun Bulan Ini
+          ============================================================ */}
+      <div className="bg-white rounded-xl border border-slate-200 p-4">
+        <Link href="/karyawan" className="flex items-center gap-2 mb-3 group">
+          <div className="w-7 h-7 rounded-lg bg-pink-50 flex items-center justify-center">
+            <Cake className="w-3.5 h-3.5 text-pink-600" />
+          </div>
+          <h3 className="text-xs font-semibold text-slate-700 group-hover:text-pink-600 transition-colors">Ulang Tahun {monthName} {tahun}</h3>
+          <span className="text-[10px] font-bold text-pink-500 bg-pink-50 px-1.5 py-0.5 rounded-full ml-auto">{birthdayList.length}</span>
+        </Link>
+        {birthdayList.length === 0 ? (
+          <p className="text-xs text-slate-400 py-2">Tidak ada ulang tahun bulan ini</p>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+            {birthdayList.slice(0, 8).map((item) => {
+              const day = item.tanggal_lahir.split('-')[2];
+              return (
+                <div key={item.id} className="flex items-center gap-2 p-2 rounded-lg border border-slate-100 hover:bg-pink-50/50 hover:border-pink-200 transition-colors">
+                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-pink-50 flex flex-col items-center justify-center">
+                    <span className="text-[10px] font-bold text-pink-600">{day}</span>
+                    <span className="text-[8px] text-pink-400">{monthName.slice(0, 3)}</span>
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-xs font-medium text-slate-900 truncate">{item.nama_kegiatan}</p>
+                    <p className="text-[11px] font-medium text-slate-900 truncate">{item.nama}</p>
                     {item.unit && (
-                      <span className="inline-flex px-1.5 py-0.5 rounded text-[9px] font-semibold text-white mt-0.5" style={{ backgroundColor: item.unit.color || '#6366f1' }}>
+                      <span className="inline-flex px-1 py-0.5 rounded text-[8px] font-semibold text-white mt-0.5" style={{ backgroundColor: item.unit.color || '#ec4899' }}>
                         {item.unit.name}
                       </span>
                     )}
                   </div>
-                  <ChevronRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-indigo-500 flex-shrink-0" />
-                </Link>
-              ))}
-              {agendaTerdekat.length > 5 && (
-                <Link href="/kaldik" className="flex items-center justify-center gap-1 pt-1 text-[11px] font-medium text-indigo-600 hover:text-indigo-700">
-                  +{agendaTerdekat.length - 5} lainnya <ArrowRight className="w-3 h-3" />
-                </Link>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Widget: Peminjaman Gereja */}
-        <div className="bg-white rounded-xl border border-slate-200 p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-7 h-7 rounded-lg bg-emerald-50 flex items-center justify-center">
-              <Church className="w-3.5 h-3.5 text-emerald-600" />
-            </div>
-            <h3 className="text-xs font-semibold text-slate-700">Peminjaman Gereja</h3>
+                </div>
+              );
+            })}
+            {birthdayList.length > 8 && (
+              <Link href="/karyawan" className="flex items-center justify-center p-2 rounded-lg border border-dashed border-slate-200 text-[11px] font-medium text-pink-600 hover:bg-pink-50 transition-colors">
+                +{birthdayList.length - 8} lainnya
+              </Link>
+            )}
           </div>
-          {portalList.filter(p => p.status === 'Approved').length === 0 ? (
-            <p className="text-xs text-slate-400 py-2">Tidak ada peminjaman mendatang</p>
-          ) : (
-            <div className="space-y-2">
-              {portalList.filter(p => p.status === 'Approved').slice(0, 5).map((item, idx) => (
-                <Link key={`${item.unit}-${item.row}-${idx}`} href="/portal" className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-slate-50 transition-colors group">
-                  <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center">
-                    <Building2 className="w-3.5 h-3.5 text-emerald-600" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-medium text-slate-900 truncate">{item.acara}</p>
-                    <p className="text-[10px] text-slate-400 truncate">{item.tanggalDisplay || item.tanggal} · {item.jam}</p>
-                  </div>
-                  <ChevronRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-emerald-500 flex-shrink-0" />
-                </Link>
-              ))}
-            </div>
-          )}
-        </div>
+        )}
+      </div>
 
-        {/* Widget: Jadwal Ibadah */}
-        <div className="bg-white rounded-xl border border-slate-200 p-4">
-          <div className="flex items-center gap-2 mb-3">
+      {/* ============================================================
+          Widget 3: Jadwal Ibadah (2 Tabs)
+          ============================================================ */}
+      <div className="bg-white rounded-xl border border-slate-200 p-4">
+        <div className="flex items-center justify-between mb-3">
+          <Link href="/jadwal" className="flex items-center gap-2 group">
             <div className="w-7 h-7 rounded-lg bg-purple-50 flex items-center justify-center">
-              <Heart className="w-3.5 h-3.5 text-purple-600" />
+              <CalendarClock className="w-3.5 h-3.5 text-purple-600" />
             </div>
-            <h3 className="text-xs font-semibold text-slate-700">Jadwal Ibadah</h3>
+            <h3 className="text-xs font-semibold text-slate-700 group-hover:text-purple-600 transition-colors">Jadwal Ibadah</h3>
+          </Link>
+          {/* Tabs */}
+          <div className="flex bg-slate-100 rounded-lg p-0.5">
+            <button
+              type="button"
+              onClick={() => setJadwalTab('ibadah')}
+              className={cn(
+                "px-2.5 py-1 text-[10px] font-semibold rounded-md transition-all",
+                jadwalTab === 'ibadah' ? "bg-white text-purple-700 shadow-sm" : "text-slate-400 hover:text-slate-600"
+              )}
+            >
+              Ibadah
+            </button>
+            <button
+              type="button"
+              onClick={() => setJadwalTab('holy_morning')}
+              className={cn(
+                "px-2.5 py-1 text-[10px] font-semibold rounded-md transition-all",
+                jadwalTab === 'holy_morning' ? "bg-white text-purple-700 shadow-sm" : "text-slate-400 hover:text-slate-600"
+              )}
+            >
+              Holy Morning
+            </button>
           </div>
-          {jadwalList.length === 0 ? (
+        </div>
+
+        {jadwalTab === 'ibadah' ? (
+          jadwalList.length === 0 ? (
             <p className="text-xs text-slate-400 py-2">Tidak ada jadwal ibadah</p>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               {jadwalList.slice(0, 5).map((item) => (
-                <Link key={item.id} href="/jadwal" className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-slate-50 transition-colors group">
+                <Link key={item.id} href="/jadwal" className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-purple-50/50 transition-colors group">
                   <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-purple-50 flex flex-col items-center justify-center">
-                    <CalendarClock className="w-3.5 h-3.5 text-purple-600" />
+                    <span className="text-[9px] font-bold text-purple-600">{item.bulan?.slice(0, 3)}</span>
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="text-xs font-medium text-slate-900 truncate">{item.tanggal}</p>
@@ -320,8 +400,73 @@ export default function DashboardPage() {
                 </Link>
               )}
             </div>
-          )}
-        </div>
+          )
+        ) : (
+          hmList.length === 0 ? (
+            <p className="text-xs text-slate-400 py-2">Tidak ada jadwal Holy Morning</p>
+          ) : (
+            <div className="space-y-1.5">
+              {hmList.slice(0, 5).map((item) => (
+                <Link key={item.id} href="/jadwal" className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-purple-50/50 transition-colors group">
+                  <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-indigo-50 flex flex-col items-center justify-center">
+                    <span className="text-[9px] font-bold text-indigo-600">{item.bulan?.slice(0, 3)}</span>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-medium text-slate-900 truncate">{item.tanggal}</p>
+                    <p className="text-[10px] text-slate-400 truncate">{item.pelayan_holy_morning}</p>
+                  </div>
+                  <ChevronRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-purple-500 flex-shrink-0" />
+                </Link>
+              ))}
+              {hmList.length > 5 && (
+                <Link href="/jadwal" className="flex items-center justify-center gap-1 pt-1 text-[11px] font-medium text-purple-600 hover:text-purple-700">
+                  +{hmList.length - 5} lainnya <ArrowRight className="w-3 h-3" />
+                </Link>
+              )}
+            </div>
+          )
+        )}
+      </div>
+
+      {/* ============================================================
+          Widget 4: Agenda 7 Hari ke Depan
+          ============================================================ */}
+      <div className="bg-white rounded-xl border border-slate-200 p-4">
+        <Link href="/kaldik" className="flex items-center gap-2 mb-3 group">
+          <div className="w-7 h-7 rounded-lg bg-indigo-50 flex items-center justify-center">
+            <Clock className="w-3.5 h-3.5 text-indigo-600" />
+          </div>
+          <h3 className="text-xs font-semibold text-slate-700 group-hover:text-indigo-600 transition-colors">Agenda 7 Hari ke Depan</h3>
+          <ChevronRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-indigo-500 ml-auto" />
+        </Link>
+        {agendaTerdekat.length === 0 ? (
+          <p className="text-xs text-slate-400 py-2">Tidak ada agenda dalam 7 hari ke depan</p>
+        ) : (
+          <div className="space-y-1.5">
+            {agendaTerdekat.slice(0, 5).map((item) => (
+              <Link key={item.id} href="/kaldik" className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-indigo-50/50 transition-colors group">
+                <div className="flex-shrink-0 w-8 h-8 rounded-lg flex flex-col items-center justify-center" style={{ backgroundColor: item.unit?.color ? `${item.unit.color}15` : '#eef2ff' }}>
+                  <span className="text-[10px] font-bold" style={{ color: item.unit?.color || '#6366f1' }}>{item.tanggal_mulai?.split('-')[2]}</span>
+                  <span className="text-[8px]" style={{ color: item.unit?.color ? `${item.unit.color}80` : '#a5b4fc' }}>{getMonthName(parseInt(item.tanggal_mulai?.split('-')[1] || '0')).slice(0, 3)}</span>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-medium text-slate-900 truncate">{item.nama_kegiatan}</p>
+                  {item.unit && (
+                    <span className="inline-flex px-1.5 py-0.5 rounded text-[9px] font-semibold text-white mt-0.5" style={{ backgroundColor: item.unit.color || '#6366f1' }}>
+                      {item.unit.name}
+                    </span>
+                  )}
+                </div>
+                <ChevronRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-indigo-500 flex-shrink-0" />
+              </Link>
+            ))}
+            {agendaTerdekat.length > 5 && (
+              <Link href="/kaldik" className="flex items-center justify-center gap-1 pt-1 text-[11px] font-medium text-indigo-600 hover:text-indigo-700">
+                +{agendaTerdekat.length - 5} lainnya <ArrowRight className="w-3 h-3" />
+              </Link>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
