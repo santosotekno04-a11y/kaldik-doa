@@ -50,7 +50,7 @@ const BULAN_LABELS = [
   "Juli", "Agustus", "September", "Oktober", "November", "Desember",
 ];
 
-const PORTAL_URL = "https://script.google.com/macros/s/AKfycbx.../exec"; // Ganti dengan URL Portal asli
+const PORTAL_URL = "https://script.google.com/macros/s/AKfycbw13TcgOlXWXe2Ry8-RCPa31N_mdhdFIJaslAU2zeyCLROpriMQelTzic2I8NstAm6h/exec"; // Ganti dengan URL Portal asli
 
 async function portalApi(action: string, params: Record<string, unknown> = {}) {
   const resp = await fetch("/api/portal", {
@@ -280,16 +280,41 @@ export default function PortalPage() {
 
         {/* Error */}
         {error && (
-          <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3">
-            <AlertCircle size={18} className="text-red-500 shrink-0 mt-0.5" />
-            <div>
-              <p className="text-sm font-medium text-red-800">Gagal memuat data</p>
-              <p className="text-xs text-red-600 mt-1">{error}</p>
-              <p className="text-xs text-red-500 mt-2">
-                Pastikan PORTAL_PROXY_URL dan PORTAL_API_KEY sudah dikonfigurasi di .env.local
-              </p>
+          error.toLowerCase().includes("not configured") || error.toLowerCase().includes("portal_proxy_url") ? (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 space-y-3">
+              <div className="flex items-start gap-3">
+                <AlertCircle size={18} className="text-amber-500 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-semibold text-amber-800">Portal belum dikonfigurasi</p>
+                  <p className="text-xs text-amber-600 mt-1">{error}</p>
+                </div>
+              </div>
+              <div className="bg-white rounded-lg border border-amber-200 p-4 space-y-3 text-xs text-gray-700">
+                <p className="font-semibold text-gray-900">Panduan Setup:</p>
+                <ol className="list-decimal list-inside space-y-2">
+                  <li>
+                    Deploy <code className="bg-gray-100 px-1 py-0.5 rounded text-[11px]">portal-proxy.gs</code> sebagai Google Apps Script terlebih dahulu
+                  </li>
+                  <li>
+                    Buka <span className="font-medium">Vercel Dashboard → Settings → Environment Variables</span>, lalu tambahkan:
+                    <div className="mt-1.5 space-y-1 ml-4">
+                      <p><code className="bg-gray-100 px-1.5 py-0.5 rounded text-[11px]">PORTAL_PROXY_URL</code> — URL deployment Google Apps Script</p>
+                      <p><code className="bg-gray-100 px-1.5 py-0.5 rounded text-[11px]">PORTAL_API_KEY</code> — API key yang sama dengan yang di-set di script</p>
+                    </div>
+                  </li>
+                  <li>Redeploy aplikasi setelah menambahkan environment variables</li>
+                </ol>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3">
+              <AlertCircle size={18} className="text-red-500 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium text-red-800">Gagal memuat data</p>
+                <p className="text-xs text-red-600 mt-1">{error}</p>
+              </div>
+            </div>
+          )
         )}
 
         {/* Loading */}

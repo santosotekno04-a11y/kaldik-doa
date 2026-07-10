@@ -137,6 +137,7 @@ export default function KaryawanPage() {
   const [bulkEditValue, setBulkEditValue] = useState('');
   const [bulkEditLoading, setBulkEditLoading] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth() + 1);
 
   // Re-validate rows when headerMapping changes (e.g. user changes dropdown)
   useEffect(() => {
@@ -215,6 +216,17 @@ export default function KaryawanPage() {
     setFilterStatus('');
     setSearch('');
   };
+
+  const birthdayKaryawan = data
+    .filter((row) => {
+      if (!row.bulan_lahir) return false;
+      return row.bulan_lahir === selectedMonth;
+    })
+    .sort((a, b) => {
+      const dayA = a.tanggal_lahir ? new Date(a.tanggal_lahir + 'T00:00:00').getDate() : 0;
+      const dayB = b.tanggal_lahir ? new Date(b.tanggal_lahir + 'T00:00:00').getDate() : 0;
+      return dayA - dayB;
+    });
 
   const openAdd = () => {
     setEditing(null);
@@ -707,81 +719,260 @@ export default function KaryawanPage() {
         }
       />
 
-      <div className="flex flex-col sm:flex-row gap-3">
-        <SearchBar
-          value={search}
-          onChange={setSearch}
-          placeholder="Cari nama, jabatan, atau unit..."
-          className="sm:w-72"
-        />
-        <FilterBar activeCount={activeFilterCount} onClearAll={clearFilters}>
-          <FilterSelect
-            value={filterUnit}
-            onChange={setFilterUnit}
-            placeholder="Semua Unit"
-            options={units.map((u) => ({ value: u.id, label: u.name }))}
-          />
-          <FilterSelect
-            value={filterStatus}
-            onChange={setFilterStatus}
-            placeholder="Semua Status"
-            options={[
-              { value: 'Aktif', label: 'Aktif' },
-              { value: 'Nonaktif', label: 'Nonaktif' },
-            ]}
-          />
-        </FilterBar>
+      {/* Month Filter Header - Always visible */}
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+        <div className="flex items-center gap-2">
+          <Cake size={18} className="text-pink-500" />
+          <label className="text-sm font-medium text-gray-700 whitespace-nowrap">Bulan Lahir:</label>
+          <select
+            value={selectedMonth}
+            onChange={(e) => setSelectedMonth(Number(e.target.value))}
+            className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+          >
+            {BULAN_NAMES.slice(1).map((name, idx) => (
+              <option key={idx + 1} value={idx + 1}>{name}</option>
+            ))}
+          </select>
+        </div>
+        {birthdayKaryawan.length > 0 && (
+          <span className="text-sm text-pink-600 font-medium">
+            {birthdayKaryawan.length} karyawan berulang tahun di bulan {BULAN_NAMES[selectedMonth]}
+          </span>
+        )}
       </div>
 
-      {filteredData.length === 0 && !loading ? (
-        <EmptyState
-          icon={<Users size={48} />}
-          title="Belum ada data karyawan"
-          description="Tambahkan karyawan baru atau import dari spreadsheet"
-          action={
-            <button
-              onClick={openAdd}
-              className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700"
-            >
-              <Plus size={16} />
-              Tambah Karyawan
-            </button>
-          }
-        />
-      ) : (
-        <>
-          {selectedIds.length > 0 && (
-            <div className="flex items-center gap-3 px-4 py-2.5 bg-indigo-50 border border-indigo-200 rounded-lg">
-              <span className="text-sm font-medium text-indigo-700">
-                {selectedIds.length} karyawan dipilih
-              </span>
-              <button
-                onClick={() => setShowBulkEditModal(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-indigo-700 bg-white border border-indigo-200 rounded-lg hover:bg-indigo-50 transition-colors"
-              >
-                <CheckSquare size={14} />
-                Bulk Edit
-              </button>
-              <button
-                onClick={() => setBulkDeleting(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-red-700 bg-white border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
-              >
-                <Trash2 size={14} />
-                Hapus Terpilih
-              </button>
-            </div>
-          )}
-          <DataTable
-            columns={columns}
-            data={filteredData}
-            loading={loading}
-            emptyMessage="Tidak ada data ditemukan"
-            compact
-            selectedIds={selectedIds}
-            onSelectionChange={setSelectedIds}
+      {/* Desktop: 3-column layout */}
+      <div className="hidden md:grid md:grid-cols-[260px_1fr_300px] gap-6 items-start">
+        {/* Left: Filters */}
+        <div className="space-y-3">
+          <SearchBar
+            value={search}
+            onChange={setSearch}
+            placeholder="Cari nama, jabatan, atau unit..."
           />
-        </>
-      )}
+          <FilterBar activeCount={activeFilterCount} onClearAll={clearFilters}>
+            <FilterSelect
+              value={filterUnit}
+              onChange={setFilterUnit}
+              placeholder="Semua Unit"
+              options={units.map((u) => ({ value: u.id, label: u.name }))}
+            />
+            <FilterSelect
+              value={filterStatus}
+              onChange={setFilterStatus}
+              placeholder="Semua Status"
+              options={[
+                { value: 'Aktif', label: 'Aktif' },
+                { value: 'Nonaktif', label: 'Nonaktif' },
+              ]}
+            />
+          </FilterBar>
+        </div>
+
+        {/* Center: Data Table */}
+        <div className="min-w-0">
+          {filteredData.length === 0 && !loading ? (
+            <EmptyState
+              icon={<Users size={48} />}
+              title="Belum ada data karyawan"
+              description="Tambahkan karyawan baru atau import dari spreadsheet"
+              action={
+                <button
+                  onClick={openAdd}
+                  className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700"
+                >
+                  <Plus size={16} />
+                  Tambah Karyawan
+                </button>
+              }
+            />
+          ) : (
+            <>
+              {selectedIds.length > 0 && (
+                <div className="flex items-center gap-3 px-4 py-2.5 bg-indigo-50 border border-indigo-200 rounded-lg mb-3">
+                  <span className="text-sm font-medium text-indigo-700">
+                    {selectedIds.length} karyawan dipilih
+                  </span>
+                  <button
+                    onClick={() => setShowBulkEditModal(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-indigo-700 bg-white border border-indigo-200 rounded-lg hover:bg-indigo-50 transition-colors"
+                  >
+                    <CheckSquare size={14} />
+                    Bulk Edit
+                  </button>
+                  <button
+                    onClick={() => setBulkDeleting(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-red-700 bg-white border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
+                  >
+                    <Trash2 size={14} />
+                    Hapus Terpilih
+                  </button>
+                </div>
+              )}
+              <DataTable
+                columns={columns}
+                data={filteredData}
+                loading={loading}
+                emptyMessage="Tidak ada data ditemukan"
+                compact
+                selectedIds={selectedIds}
+                onSelectionChange={setSelectedIds}
+              />
+            </>
+          )}
+        </div>
+
+        {/* Right: Birthday Panel */}
+        <div>
+          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden sticky top-4">
+            <div className="px-4 py-3 bg-gradient-to-r from-pink-50 to-purple-50 border-b border-gray-100">
+              <h3 className="text-sm font-semibold text-gray-800 flex items-center gap-2">
+                <Cake size={16} className="text-pink-500" />
+                Ulang Tahun {BULAN_NAMES[selectedMonth]}
+              </h3>
+              <p className="text-xs text-gray-500 mt-0.5">{birthdayKaryawan.length} karyawan</p>
+            </div>
+            <div className="max-h-[calc(100vh-380px)] overflow-y-auto">
+              {birthdayKaryawan.length === 0 ? (
+                <div className="px-4 py-8 text-center text-sm text-gray-400">
+                  Tidak ada ulang tahun di bulan ini
+                </div>
+              ) : (
+                <div className="divide-y divide-gray-50">
+                  {birthdayKaryawan.map((k) => (
+                    <div key={k.id} className="px-4 py-3 hover:bg-pink-50/50 transition-colors">
+                      <div className="flex items-start gap-3">
+                        <div className="flex-shrink-0 w-9 h-9 rounded-full bg-pink-100 flex items-center justify-center">
+                          <Cake size={14} className="text-pink-500" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">{k.nama}</p>
+                          <p className="text-xs text-gray-500">
+                            {k.tanggal_lahir ? formatDate(k.tanggal_lahir, 'dd MMMM yyyy') : '-'}
+                          </p>
+                          {k.unit && (
+                            <div className="mt-1">
+                              <UnitBadge unitName={k.unit.name} />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Mobile: Vertical stack */}
+      <div className="md:hidden space-y-4">
+        <div className="flex flex-col sm:flex-row gap-3">
+          <SearchBar
+            value={search}
+            onChange={setSearch}
+            placeholder="Cari nama, jabatan, atau unit..."
+            className="sm:w-72"
+          />
+          <FilterBar activeCount={activeFilterCount} onClearAll={clearFilters}>
+            <FilterSelect
+              value={filterUnit}
+              onChange={setFilterUnit}
+              placeholder="Semua Unit"
+              options={units.map((u) => ({ value: u.id, label: u.name }))}
+            />
+            <FilterSelect
+              value={filterStatus}
+              onChange={setFilterStatus}
+              placeholder="Semua Status"
+              options={[
+                { value: 'Aktif', label: 'Aktif' },
+                { value: 'Nonaktif', label: 'Nonaktif' },
+              ]}
+            />
+          </FilterBar>
+        </div>
+
+        {/* Birthday cards on mobile */}
+        {birthdayKaryawan.length > 0 && (
+          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <div className="px-4 py-3 bg-gradient-to-r from-pink-50 to-purple-50 border-b border-gray-100">
+              <h3 className="text-sm font-semibold text-gray-800 flex items-center gap-2">
+                <Cake size={16} className="text-pink-500" />
+                Ulang Tahun {BULAN_NAMES[selectedMonth]}
+                <span className="ml-auto text-xs font-normal text-gray-500">{birthdayKaryawan.length} karyawan</span>
+              </h3>
+            </div>
+            <div className="p-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {birthdayKaryawan.map((k) => (
+                <div key={k.id} className="flex items-center gap-3 p-3 rounded-lg bg-pink-50/50 border border-pink-100">
+                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-pink-100 flex items-center justify-center">
+                    <Cake size={13} className="text-pink-500" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 truncate">{k.nama}</p>
+                    <p className="text-xs text-gray-500">
+                      {k.tanggal_lahir ? formatDate(k.tanggal_lahir, 'dd MMM') : '-'}
+                      {k.unit && <span className="ml-1 text-gray-400">· {k.unit.name}</span>}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {filteredData.length === 0 && !loading ? (
+          <EmptyState
+            icon={<Users size={48} />}
+            title="Belum ada data karyawan"
+            description="Tambahkan karyawan baru atau import dari spreadsheet"
+            action={
+              <button
+                onClick={openAdd}
+                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700"
+              >
+                <Plus size={16} />
+                Tambah Karyawan
+              </button>
+            }
+          />
+        ) : (
+          <>
+            {selectedIds.length > 0 && (
+              <div className="flex items-center gap-3 px-4 py-2.5 bg-indigo-50 border border-indigo-200 rounded-lg">
+                <span className="text-sm font-medium text-indigo-700">
+                  {selectedIds.length} karyawan dipilih
+                </span>
+                <button
+                  onClick={() => setShowBulkEditModal(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-indigo-700 bg-white border border-indigo-200 rounded-lg hover:bg-indigo-50 transition-colors"
+                >
+                  <CheckSquare size={14} />
+                  Bulk Edit
+                </button>
+                <button
+                  onClick={() => setBulkDeleting(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-red-700 bg-white border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
+                >
+                  <Trash2 size={14} />
+                  Hapus Terpilih
+                </button>
+              </div>
+            )}
+            <DataTable
+              columns={columns}
+              data={filteredData}
+              loading={loading}
+              emptyMessage="Tidak ada data ditemukan"
+              compact
+              selectedIds={selectedIds}
+              onSelectionChange={setSelectedIds}
+            />
+          </>
+        )}
+      </div>
 
       {/* Add/Edit Modal */}
       <Modal
