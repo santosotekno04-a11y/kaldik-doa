@@ -8,6 +8,7 @@ import { SearchBar, PageHeader, FilterSelect } from '@/components/ui/filter-bar'
 import { useToast } from '@/components/ui/toast';
 import { supabase } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils/cn';
+import { parseTanggalToISO, extractBulanFromTanggal } from '@/lib/utils/date';
 import html2canvas from 'html2canvas-pro';
 import {
   Plus, Upload, Camera, Share2, Edit2, Trash2, Copy,
@@ -248,8 +249,8 @@ export default function JadwalPage() {
       .from('jadwal_ibadah')
       .select('*')
       .eq('tahun_ajaran', tahunAjaran)
-      .order('urutan', { ascending: true, nullsFirst: false })
-      .order('tanggal', { ascending: true });
+      .order('tanggal_sort', { ascending: true, nullsFirst: false })
+      .order('urutan', { ascending: true, nullsFirst: false });
     if (error) throw error;
     setIbadahData((rows || []) as unknown as IbadahRow[]);
   }, [tahunAjaran]);
@@ -259,8 +260,8 @@ export default function JadwalPage() {
       .from('jadwal_holy_morning')
       .select('*')
       .eq('tahun_ajaran', tahunAjaran)
-      .order('urutan', { ascending: true, nullsFirst: false })
-      .order('tanggal', { ascending: true });
+      .order('tanggal_sort', { ascending: true, nullsFirst: false })
+      .order('urutan', { ascending: true, nullsFirst: false });
     if (error) throw error;
     setHmData((rows || []) as unknown as HolyMorningRow[]);
   }, [tahunAjaran]);
@@ -360,7 +361,8 @@ export default function JadwalPage() {
     setSaving(true);
     try {
       if (activeTab === 'ibadah') {
-        const payload = { ...ibadahForm, tahun_ajaran: tahunAjaran };
+        const tanggalSort = parseTanggalToISO(ibadahForm.tanggal || '');
+        const payload = { ...ibadahForm, tahun_ajaran: tahunAjaran, tanggal_sort: tanggalSort };
         if (editingIbadah) {
           const { error } = await supabase
             .from('jadwal_ibadah')
@@ -376,7 +378,8 @@ export default function JadwalPage() {
           addToast('success', 'Jadwal ibadah berhasil ditambahkan');
         }
       } else {
-        const payload = { ...hmForm, tahun_ajaran: tahunAjaran };
+        const tanggalSort = parseTanggalToISO(hmForm.tanggal || '');
+        const payload = { ...hmForm, tahun_ajaran: tahunAjaran, tanggal_sort: tanggalSort };
         if (editingHM) {
           const { error } = await supabase
             .from('jadwal_holy_morning')
@@ -427,12 +430,14 @@ export default function JadwalPage() {
       if (type === 'ibadah') {
         const r = row as IbadahRow;
         const { id: _id, created_at: _ca, updated_at: _ua, ...rest } = r;
-        const { error } = await supabase.from('jadwal_ibadah').insert([{ ...rest, tahun_ajaran: tahunAjaran }]);
+        const tanggalSort = parseTanggalToISO(rest.tanggal || '');
+        const { error } = await supabase.from('jadwal_ibadah').insert([{ ...rest, tahun_ajaran: tahunAjaran, tanggal_sort: tanggalSort }]);
         if (error) throw error;
       } else {
         const r = row as HolyMorningRow;
         const { id: _id, created_at: _ca, updated_at: _ua, ...rest } = r;
-        const { error } = await supabase.from('jadwal_holy_morning').insert([{ ...rest, tahun_ajaran: tahunAjaran }]);
+        const tanggalSort = parseTanggalToISO(rest.tanggal || '');
+        const { error } = await supabase.from('jadwal_holy_morning').insert([{ ...rest, tahun_ajaran: tahunAjaran, tanggal_sort: tanggalSort }]);
         if (error) throw error;
       }
       addToast('success', 'Data berhasil diduplikasi');
@@ -519,7 +524,11 @@ export default function JadwalPage() {
     try {
       const table = activeTab === 'ibadah' ? 'jadwal_ibadah' : 'jadwal_holy_morning';
       const validRows = parsedCsv.filter((r) => r.bulan);
-      const payload = validRows.map((r) => ({ ...r, tahun_ajaran: tahunAjaran }));
+      const payload = validRows.map((r) => ({
+        ...r,
+        tahun_ajaran: tahunAjaran,
+        tanggal_sort: parseTanggalToISO(r.tanggal || ''),
+      }));
       const { error } = await supabase.from(table).insert(payload);
       if (error) throw error;
       addToast('success', `${payload.length} data berhasil diimpor`);

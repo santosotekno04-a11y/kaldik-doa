@@ -251,6 +251,7 @@ export interface JadwalIbadah {
   nas_alkitab: string;
   catatan: string;
   urutan: number;
+  tanggal_sort: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -272,6 +273,7 @@ export interface JadwalHolyMorning {
   keterangan: string;
   catatan: string;
   urutan: number;
+  tanggal_sort: string | null;
   created_at: string;
   updated_at: string;
 }
