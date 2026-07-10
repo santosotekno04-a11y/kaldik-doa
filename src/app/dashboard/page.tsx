@@ -161,8 +161,8 @@ export default function DashboardPage() {
           .order('tanggal_mulai', { ascending: true })
           .limit(10),
         supabase
-          .from('holy_morning')
-          .select('id, tanggal, pelayan_holy_morning, tema_bulanan, tema_mingguan, nas_alkitab, bulan')
+          .from('jadwal_holy_morning')
+          .select('id, tanggal, pelayan_holy_morning, tema_bulanan, nas_alkitab, bulan')
           .eq('tahun_ajaran', '2026-2027')
           .order('tanggal_sort', { ascending: true, nullsFirst: false })
           .limit(10),
