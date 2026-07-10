@@ -1,7 +1,7 @@
 'use client';
 export const dynamic = 'force-dynamic';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Modal, ConfirmDialog } from '@/components/ui/modal';
 import { Input, Select, Textarea } from '@/components/ui/form-controls';
 import { SearchBar, FilterSelect } from '@/components/ui/filter-bar';
@@ -13,7 +13,7 @@ import html2canvas from 'html2canvas-pro';
 import {
   Plus, Upload, Camera, Share2, Edit2, Trash2, Copy, ChevronLeft, ChevronRight,
   Loader2, Search, FileSpreadsheet, X, Eye, Calendar, Filter, TableIcon,
-  CheckSquare, Download,
+  CheckSquare, Download, AlertTriangle,
 } from 'lucide-react';
 
 /* Constants */
@@ -250,6 +250,19 @@ export default function JadwalPage() {
     if (!matchesSearch(row)) return false;
     return true;
   });
+
+  // Detect bentrok (duplicate dates)
+  const bentrokDates = useMemo(() => {
+    const data = activeTab === 'ibadah' ? filteredIbadah : filteredHM;
+    const dateCount = new Map<string, number>();
+    data.forEach((row) => {
+      const tgl = row.tanggal_sort || row.tanggal;
+      if (tgl) dateCount.set(tgl, (dateCount.get(tgl) || 0) + 1);
+    });
+    const bentrok = new Set<string>();
+    dateCount.forEach((count, date) => { if (count > 1) bentrok.add(date); });
+    return bentrok;
+  }, [activeTab, filteredIbadah, filteredHM]);
 
   const currentData = activeTab === 'ibadah' ? filteredIbadah.map((r) => r.id) : filteredHM.map((r) => r.id);
   const allSelected = currentData.length > 0 && currentData.every((id) => selectedIds.has(id));
@@ -573,13 +586,26 @@ export default function JadwalPage() {
         </div>
       ) : (
         <>
+          {/* Bentrok Alert */}
+          {bentrokDates.size > 0 && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-start gap-2.5">
+              <AlertTriangle size={16} className="text-amber-500 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-semibold text-amber-800">Jadwal Bentrok Terdeteksi</p>
+                <p className="text-xs text-amber-600 mt-0.5">
+                  Ditemukan {bentrokDates.size} tanggal yang memiliki lebih dari satu jadwal. Baris yang bentrok ditandai dengan ikon peringatan.
+                </p>
+              </div>
+            </div>
+          )}
+
           <div ref={tableContainerRef} className="hidden md:block">
             <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
               <div className="overflow-x-auto">
                 {activeTab === 'ibadah' ? (
-                  <IbadahTable data={filteredIbadah} selectedIds={selectedIds} allSelected={allSelected} onToggleSelectAll={toggleSelectAll} onToggleSelectOne={toggleSelectOne} onEdit={(row) => openEditModal(row, 'ibadah')} onDelete={(id) => setDeleteTarget({ id, type: 'ibadah' })} onDuplicate={(row) => handleDuplicate(row, 'ibadah')} onView={(row) => openDetail(row, 'ibadah')} />
+                  <IbadahTable data={filteredIbadah} selectedIds={selectedIds} allSelected={allSelected} onToggleSelectAll={toggleSelectAll} onToggleSelectOne={toggleSelectOne} onEdit={(row) => openEditModal(row, 'ibadah')} onDelete={(id) => setDeleteTarget({ id, type: 'ibadah' })} onDuplicate={(row) => handleDuplicate(row, 'ibadah')} onView={(row) => openDetail(row, 'ibadah')} bentrokDates={bentrokDates} />
                 ) : (
-                  <HMTable data={filteredHM} selectedIds={selectedIds} allSelected={allSelected} onToggleSelectAll={toggleSelectAll} onToggleSelectOne={toggleSelectOne} onEdit={(row) => openEditModal(row, 'holy_morning')} onDelete={(id) => setDeleteTarget({ id, type: 'holy_morning' })} onDuplicate={(row) => handleDuplicate(row, 'holy_morning')} onView={(row) => openDetail(row, 'holy_morning')} />
+                  <HMTable data={filteredHM} selectedIds={selectedIds} allSelected={allSelected} onToggleSelectAll={toggleSelectAll} onToggleSelectOne={toggleSelectOne} onEdit={(row) => openEditModal(row, 'holy_morning')} onDelete={(id) => setDeleteTarget({ id, type: 'holy_morning' })} onDuplicate={(row) => handleDuplicate(row, 'holy_morning')} onView={(row) => openDetail(row, 'holy_morning')} bentrokDates={bentrokDates} />
                 )}
               </div>
             </div>
@@ -588,10 +614,10 @@ export default function JadwalPage() {
           <div className="md:hidden space-y-3">
             {activeTab === 'ibadah' ? (
               filteredIbadah.length === 0 ? <EmptyCard /> : filteredIbadah.map((row) => (
-                <IbadahCard key={row.id} row={row} selected={selectedIds.has(row.id)} onToggleSelect={() => toggleSelectOne(row.id)} onEdit={() => openEditModal(row, 'ibadah')} onDelete={() => setDeleteTarget({ id: row.id, type: 'ibadah' })} onDuplicate={() => handleDuplicate(row, 'ibadah')} onView={() => openDetail(row, 'ibadah')} />
+                <IbadahCard key={row.id} row={row} selected={selectedIds.has(row.id)} onToggleSelect={() => toggleSelectOne(row.id)} onEdit={() => openEditModal(row, 'ibadah')} onDelete={() => setDeleteTarget({ id: row.id, type: 'ibadah' })} onDuplicate={() => handleDuplicate(row, 'ibadah')} onView={() => openDetail(row, 'ibadah')} bentrokDates={bentrokDates} />
               ))
             ) : filteredHM.length === 0 ? <EmptyCard /> : filteredHM.map((row) => (
-              <HMCard key={row.id} row={row} selected={selectedIds.has(row.id)} onToggleSelect={() => toggleSelectOne(row.id)} onEdit={() => openEditModal(row, 'holy_morning')} onDelete={() => setDeleteTarget({ id: row.id, type: 'holy_morning' })} onDuplicate={() => handleDuplicate(row, 'holy_morning')} onView={() => openDetail(row, 'holy_morning')} />
+              <HMCard key={row.id} row={row} selected={selectedIds.has(row.id)} onToggleSelect={() => toggleSelectOne(row.id)} onEdit={() => openEditModal(row, 'holy_morning')} onDelete={() => setDeleteTarget({ id: row.id, type: 'holy_morning' })} onDuplicate={() => handleDuplicate(row, 'holy_morning')} onView={() => openDetail(row, 'holy_morning')} bentrokDates={bentrokDates} />
             ))}
           </div>
 
@@ -604,7 +630,7 @@ export default function JadwalPage() {
 
       <div ref={screenshotRef} style={{ position: 'fixed', left: '-9999px', top: 0, zIndex: -1 }}>
         <div className="bg-white p-6" style={{ width: '1200px' }}>
-          <div className="p-6 rounded-t-xl mb-4" style={{ background: 'linear-gradient(135deg, #4338ca 0%, #6366f1 100%)' }}>
+          <div className="p-6 rounded-t-xl mb-4 text-center" style={{ background: 'linear-gradient(135deg, #4338ca 0%, #6366f1 100%)' }}>
             <h1 className="text-xl font-bold text-white">
               {activeTab === 'ibadah' ? `Jadwal Ibadah dan Pelayan dalam Ibadah Pegawai — Tahun Ajar ${tahunAjaran}` : `Jadwal Pelayan Firman Holy Morning — Tahun Ajar ${tahunAjaran}`}
             </h1>
@@ -693,14 +719,14 @@ export default function JadwalPage() {
         {detailRow && (
           <div>
             <div ref={detailRef} className="bg-white">
-              <div className="p-6 rounded-t-xl mb-4" style={{ background: 'linear-gradient(135deg, #4338ca 0%, #6366f1 100%)' }}>
+              <div className="p-6 rounded-t-xl mb-4 text-center" style={{ background: 'linear-gradient(135deg, #4338ca 0%, #6366f1 100%)' }}>
                 <h1 className="text-lg font-bold text-white">
                   {detailType === 'ibadah' ? 'Jadwal Ibadah dan Pelayan dalam Ibadah Pegawai' : 'Jadwal Pelayan Firman Holy Morning'}
                 </h1>
                 <p className="text-indigo-200 text-sm mt-1">Sekolah Kristen Lentera — Tahun Ajar {detailRow.tahun_ajaran}</p>
                 <p className="text-indigo-200 text-xs mt-0.5">Periode: {detailRow.bulan} / {detailRow.tanggal}</p>
               </div>
-              <div className="space-y-3 px-2 pb-4">
+              <div className="space-y-1 px-4 pb-4">
                 {detailType === 'ibadah' ? (
                   <>
                     <DetailField label="BULAN" value={(detailRow as IbadahRow).bulan} />
@@ -803,18 +829,19 @@ export default function JadwalPage() {
 
 function DetailField({ label, value }: { label: string; value: string | null | undefined }) {
   return (
-    <div className="flex gap-3 border-b border-gray-100 pb-2">
-      <span className="text-xs font-semibold text-gray-500 min-w-[180px] shrink-0 uppercase tracking-wide">{label}</span>
-      <span className="text-sm text-gray-800">{value || '—'}</span>
+    <div className="text-center py-2 border-b border-gray-100">
+      <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-0.5">{label}</p>
+      <p className="text-sm font-medium text-gray-800">{value || '—'}</p>
     </div>
   );
 }
 
-function IbadahTable({ data, selectedIds, allSelected, onToggleSelectAll, onToggleSelectOne, onEdit, onDelete, onDuplicate, onView }: {
+function IbadahTable({ data, selectedIds, allSelected, onToggleSelectAll, onToggleSelectOne, onEdit, onDelete, onDuplicate, onView, bentrokDates }: {
   data: IbadahRow[]; selectedIds: Set<string>; allSelected: boolean;
   onToggleSelectAll: () => void; onToggleSelectOne: (id: string) => void;
   onEdit: (row: IbadahRow) => void; onDelete: (id: string) => void;
   onDuplicate: (row: IbadahRow) => void; onView: (row: IbadahRow) => void;
+  bentrokDates?: Set<string>;
 }) {
   if (data.length === 0) return (<div className="py-16 text-center text-gray-400"><FileSpreadsheet size={40} className="mx-auto mb-3 opacity-40" /><p className="text-sm">Belum ada data jadwal ibadah</p></div>);
   return (
@@ -838,7 +865,14 @@ function IbadahTable({ data, selectedIds, allSelected, onToggleSelectAll, onTogg
             <td className="px-2 py-3"><input type="checkbox" checked={selectedIds.has(row.id)} onChange={() => onToggleSelectOne(row.id)} className="rounded border-gray-300 text-indigo-600" /></td>
             <td className="px-4 py-3 text-gray-500">{i + 1}</td>
             <td className="px-4 py-3 font-medium text-gray-900">{row.bulan}</td>
-            <td className="px-4 py-3 text-gray-700">{row.tanggal}</td>
+            <td className="px-4 py-3 text-gray-700">
+              <span className="flex items-center gap-1.5">
+                {bentrokDates?.has(row.tanggal_sort || row.tanggal) && (
+                  <AlertTriangle size={13} className="text-amber-500 shrink-0" />
+                )}
+                {row.tanggal}
+              </span>
+            </td>
             <td className="px-4 py-3 text-gray-700">{row.pelayan_ibadah}</td>
             <td className="px-4 py-3 text-gray-700">{row.pemberita_firman}</td>
             <td className="px-4 py-3 text-gray-700">{row.tema_ibadah_bulanan}</td>
@@ -858,11 +892,12 @@ function IbadahTable({ data, selectedIds, allSelected, onToggleSelectAll, onTogg
   );
 }
 
-function HMTable({ data, selectedIds, allSelected, onToggleSelectAll, onToggleSelectOne, onEdit, onDelete, onDuplicate, onView }: {
+function HMTable({ data, selectedIds, allSelected, onToggleSelectAll, onToggleSelectOne, onEdit, onDelete, onDuplicate, onView, bentrokDates }: {
   data: HolyMorningRow[]; selectedIds: Set<string>; allSelected: boolean;
   onToggleSelectAll: () => void; onToggleSelectOne: (id: string) => void;
   onEdit: (row: HolyMorningRow) => void; onDelete: (id: string) => void;
   onDuplicate: (row: HolyMorningRow) => void; onView: (row: HolyMorningRow) => void;
+  bentrokDates?: Set<string>;
 }) {
   if (data.length === 0) return (<div className="py-16 text-center text-gray-400"><FileSpreadsheet size={40} className="mx-auto mb-3 opacity-40" /><p className="text-sm">Belum ada data jadwal Holy Morning</p></div>);
   return (
@@ -892,7 +927,14 @@ function HMTable({ data, selectedIds, allSelected, onToggleSelectAll, onToggleSe
             <td className="px-2 py-3"><input type="checkbox" checked={selectedIds.has(row.id)} onChange={() => onToggleSelectOne(row.id)} className="rounded border-gray-300 text-indigo-600" /></td>
             <td className="px-3 py-3 text-gray-500">{i + 1}</td>
             <td className="px-3 py-3 font-medium text-gray-900">{row.bulan}</td>
-            <td className="px-3 py-3 text-gray-700">{row.tanggal}</td>
+            <td className="px-3 py-3 text-gray-700">
+              <span className="flex items-center gap-1.5">
+                {bentrokDates?.has(row.tanggal_sort || row.tanggal) && (
+                  <AlertTriangle size={13} className="text-amber-500 shrink-0" />
+                )}
+                {row.tanggal}
+              </span>
+            </td>
             <td className="px-3 py-3 text-gray-700">{row.christian_worldview}</td>
             <td className="px-3 py-3 text-gray-700">{row.profil}</td>
             <td className="px-3 py-3 text-gray-700">{row.bestra}</td>
@@ -918,16 +960,23 @@ function HMTable({ data, selectedIds, allSelected, onToggleSelectAll, onToggleSe
   );
 }
 
-function IbadahCard({ row, selected, onToggleSelect, onEdit, onDelete, onDuplicate, onView }: {
+function IbadahCard({ row, selected, onToggleSelect, onEdit, onDelete, onDuplicate, onView, bentrokDates }: {
   row: IbadahRow; selected: boolean; onToggleSelect: () => void;
   onEdit: () => void; onDelete: () => void; onDuplicate: () => void; onView: () => void;
+  bentrokDates?: Set<string>;
 }) {
+  const isBentrok = bentrokDates?.has(row.tanggal_sort || row.tanggal);
   return (
-    <div className={cn('bg-white rounded-xl border p-4 space-y-2', selected ? 'border-indigo-300 bg-indigo-50/30' : 'border-gray-200')}>
+    <div className={cn('bg-white rounded-xl border p-4 space-y-2', isBentrok ? 'border-amber-300 bg-amber-50/30' : selected ? 'border-indigo-300 bg-indigo-50/30' : 'border-gray-200')}>
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-2">
           <input type="checkbox" checked={selected} onChange={onToggleSelect} className="rounded border-gray-300 text-indigo-600" />
           <span className="inline-block px-2 py-0.5 text-xs font-semibold text-indigo-700 bg-indigo-100 rounded-full">{row.bulan}</span>
+          {isBentrok && (
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 bg-amber-100 rounded-full">
+              <AlertTriangle size={10} /> Bentrok
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-1">
           <button onClick={onView} className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg"><Eye size={14} /></button>
@@ -945,16 +994,23 @@ function IbadahCard({ row, selected, onToggleSelect, onEdit, onDelete, onDuplica
   );
 }
 
-function HMCard({ row, selected, onToggleSelect, onEdit, onDelete, onDuplicate, onView }: {
+function HMCard({ row, selected, onToggleSelect, onEdit, onDelete, onDuplicate, onView, bentrokDates }: {
   row: HolyMorningRow; selected: boolean; onToggleSelect: () => void;
   onEdit: () => void; onDelete: () => void; onDuplicate: () => void; onView: () => void;
+  bentrokDates?: Set<string>;
 }) {
+  const isBentrok = bentrokDates?.has(row.tanggal_sort || row.tanggal);
   return (
-    <div className={cn('bg-white rounded-xl border p-4 space-y-2', selected ? 'border-indigo-300 bg-indigo-50/30' : 'border-gray-200')}>
+    <div className={cn('bg-white rounded-xl border p-4 space-y-2', isBentrok ? 'border-amber-300 bg-amber-50/30' : selected ? 'border-indigo-300 bg-indigo-50/30' : 'border-gray-200')}>
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-2">
           <input type="checkbox" checked={selected} onChange={onToggleSelect} className="rounded border-gray-300 text-indigo-600" />
           <span className="inline-block px-2 py-0.5 text-xs font-semibold text-indigo-700 bg-indigo-100 rounded-full">{row.bulan}</span>
+          {isBentrok && (
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 bg-amber-100 rounded-full">
+              <AlertTriangle size={10} /> Bentrok
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-1">
           <button onClick={onView} className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg"><Eye size={14} /></button>

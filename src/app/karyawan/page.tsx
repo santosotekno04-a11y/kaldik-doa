@@ -10,7 +10,7 @@ import { Input, Select, Textarea } from '@/components/ui/form-controls';
 import { useToast } from '@/components/ui/toast';
 import { supabase } from '@/lib/supabase/client';
 import { formatDate } from '@/lib/utils/date';
-import { Users, Plus, Cake, Pencil, Trash2, Upload, Copy, CheckSquare } from 'lucide-react';
+import { Users, Plus, Cake, Pencil, Trash2, Upload, Copy, CheckSquare, ChevronDown, ChevronUp } from 'lucide-react';
 
 const BULAN_NAMES = [
   '', 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
@@ -138,6 +138,7 @@ export default function KaryawanPage() {
   const [bulkEditLoading, setBulkEditLoading] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth() + 1);
+  const [birthdayExpanded, setBirthdayExpanded] = useState(true);
 
   // Re-validate rows when headerMapping changes (e.g. user changes dropdown)
   useEffect(() => {
@@ -694,6 +695,26 @@ export default function KaryawanPage() {
     },
   ];
 
+  const mobileColumns = [
+    {
+      key: 'karyawan_id',
+      header: 'ID',
+      className: 'hidden sm:table-cell',
+      render: (row: KaryawanRow) => (
+        <span className="text-xs text-gray-500 font-mono">{row.karyawan_id}</span>
+      ),
+    },
+    ...columns
+      .filter((c) => c.key !== 'bulan_lahir')
+      .map((c) => ({
+        ...c,
+        className:
+          c.key === 'unit' || c.key === 'jabatan' || c.key === 'tanggal_masuk' || c.key === 'status'
+            ? 'hidden sm:table-cell'
+            : undefined,
+      })),
+  ];
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -897,29 +918,42 @@ export default function KaryawanPage() {
         {/* Birthday cards on mobile */}
         {birthdayKaryawan.length > 0 && (
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-            <div className="px-4 py-3 bg-gradient-to-r from-pink-50 to-purple-50 border-b border-gray-100">
-              <h3 className="text-sm font-semibold text-gray-800 flex items-center gap-2">
-                <Cake size={16} className="text-pink-500" />
-                Ulang Tahun {BULAN_NAMES[selectedMonth]}
-                <span className="ml-auto text-xs font-normal text-gray-500">{birthdayKaryawan.length} karyawan</span>
-              </h3>
-            </div>
-            <div className="p-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {birthdayKaryawan.map((k) => (
-                <div key={k.id} className="flex items-center gap-3 p-3 rounded-lg bg-pink-50/50 border border-pink-100">
-                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-pink-100 flex items-center justify-center">
-                    <Cake size={13} className="text-pink-500" />
+            <button
+              type="button"
+              onClick={() => setBirthdayExpanded(!birthdayExpanded)}
+              className="w-full px-4 py-3 bg-gradient-to-r from-pink-50 to-purple-50 border-b border-gray-100 flex items-center gap-2"
+            >
+              <Cake size={16} className="text-pink-500 flex-shrink-0" />
+              <span className="text-sm font-semibold text-gray-800">Ulang Tahun {BULAN_NAMES[selectedMonth]}</span>
+              <span className="ml-1 inline-flex items-center justify-center px-2 py-0.5 text-xs font-medium rounded-full bg-pink-100 text-pink-700">
+                {birthdayKaryawan.length}
+              </span>
+              <span className="ml-auto text-gray-400">
+                {birthdayExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+              </span>
+            </button>
+            {birthdayExpanded && (
+              <div className="p-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {birthdayKaryawan.map((k) => (
+                  <div key={k.id} className="flex items-center gap-3 p-3 rounded-lg bg-pink-50/50 border border-pink-100">
+                    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-pink-100 flex items-center justify-center">
+                      <Cake size={13} className="text-pink-500" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900 truncate">{k.nama}</p>
+                      <p className="text-xs text-gray-500">
+                        {k.tanggal_lahir ? formatDate(k.tanggal_lahir, 'dd MMM') : '-'}
+                      </p>
+                    </div>
+                    {k.unit && (
+                      <div className="flex-shrink-0 hidden sm:block">
+                        <UnitBadge unitName={k.unit.name} />
+                      </div>
+                    )}
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 truncate">{k.nama}</p>
-                    <p className="text-xs text-gray-500">
-                      {k.tanggal_lahir ? formatDate(k.tanggal_lahir, 'dd MMM') : '-'}
-                      {k.unit && <span className="ml-1 text-gray-400">· {k.unit.name}</span>}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -962,7 +996,7 @@ export default function KaryawanPage() {
               </div>
             )}
             <DataTable
-              columns={columns}
+              columns={mobileColumns}
               data={filteredData}
               loading={loading}
               emptyMessage="Tidak ada data ditemukan"

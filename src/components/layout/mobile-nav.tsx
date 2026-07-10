@@ -6,17 +6,17 @@ import { cn } from "@/lib/utils/cn";
 import {
   LayoutDashboard,
   CalendarDays,
+  CalendarClock,
+  Building2,
   BookHeart,
-  Users,
-  MoreHorizontal,
 } from "lucide-react";
 
 const primaryItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/kaldik", label: "Kaldik", icon: CalendarDays },
+  { href: "/portal", label: "Portal", icon: Building2 },
+  { href: "/jadwal", label: "Jadwal", icon: CalendarClock },
   { href: "/generate-doa", label: "Doa", icon: BookHeart },
-  { href: "/karyawan", label: "Karyawan", icon: Users },
-  { href: "/setting", label: "Lainnya", icon: MoreHorizontal },
 ];
 
 export function MobileNav() {

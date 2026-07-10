@@ -1,11 +1,11 @@
 "use client";
 export const dynamic = 'force-dynamic';
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Building2, RefreshCw, CheckCircle, XCircle, Clock, Ban,
   ExternalLink, Filter, Loader2, AlertCircle, ChevronLeft, ChevronRight,
-  Users, CalendarDays
+  Users, CalendarDays, Settings2, List
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 
@@ -50,6 +50,57 @@ const BULAN_LABELS = [
   "Juli", "Agustus", "September", "Oktober", "November", "Desember",
 ];
 
+const CAL_MONTH_NAMES = [
+  "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+  "Juli", "Agustus", "September", "Oktober", "November", "Desember",
+];
+const CAL_DAY_HEADERS = ["Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min"];
+
+function getTAMonths(startMonth: number, startYear: number) {
+  const months: { month: number; year: number; label: string }[] = [];
+  for (let i = 0; i < 12; i++) {
+    let m = startMonth + i;
+    let y = startYear;
+    if (m > 12) { m -= 12; y += 1; }
+    months.push({ month: m, year: y, label: `${BULAN_LABELS[m].slice(0, 3)} ${y}` });
+  }
+  return months;
+}
+
+function getDaysInMonthGrid(month: number, year: number) {
+  const firstDay = new Date(year, month, 1);
+  const lastDay = new Date(year, month + 1, 0);
+  const startDay = firstDay.getDay();
+  const days: (number | null)[] = [];
+  const startOffset = startDay === 0 ? 6 : startDay - 1;
+  for (let i = 0; i < startOffset; i++) days.push(null);
+  for (let d = 1; d <= lastDay.getDate(); d++) days.push(d);
+  while (days.length % 7 !== 0) days.push(null);
+  return days;
+}
+
+function getUnitDotColor(unit: string): string {
+  const colors: Record<string, string> = {
+    TK: "bg-rose-500",
+    SD: "bg-blue-500",
+    SMP: "bg-purple-500",
+    TBI: "bg-teal-500",
+  };
+  return colors[unit] || "bg-gray-500";
+}
+
+function portalDateMatches(item: PortalJadwal, day: number, month: number, year: number): boolean {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const dateStr = `${year}-${pad(month + 1)}-${pad(day)}`;
+  if (item.tanggal === dateStr) return true;
+  if (item.tanggalDisplay === dateStr) return true;
+  try {
+    const d = new Date(item.tanggal);
+    if (!isNaN(d.getTime()) && d.getDate() === day && d.getMonth() === month && d.getFullYear() === year) return true;
+  } catch {}
+  return false;
+}
+
 const PORTAL_URL = "https://script.google.com/macros/s/AKfycbw13TcgOlXWXe2Ry8-RCPa31N_mdhdFIJaslAU2zeyCLROpriMQelTzic2I8NstAm6h/exec"; // Ganti dengan URL Portal asli
 
 async function portalApi(action: string, params: Record<string, unknown> = {}) {
@@ -64,7 +115,7 @@ async function portalApi(action: string, params: Record<string, unknown> = {}) {
 export default function PortalPage() {
   const now = new Date();
   const [bulan, setBulan] = useState(now.getMonth() + 1);
-  const [tahun] = useState(now.getFullYear());
+  const [tahun, setTahun] = useState(now.getFullYear());
   const [unitFilter, setUnitFilter] = useState("ALL");
   const [statusFilter, setStatusFilter] = useState("all");
   const [data, setData] = useState<PortalJadwal[]>([]);
@@ -75,27 +126,72 @@ export default function PortalPage() {
   const [page, setPage] = useState(0);
   const pageSize = 20;
 
+  // Academic Year
+  const [taStartMonth, setTaStartMonth] = useState(7);
+  const [taStartYear, setTaStartYear] = useState(2026);
+  const [showTaSettings, setShowTaSettings] = useState(false);
+  const taMonths = useMemo(() => getTAMonths(taStartMonth, taStartYear), [taStartMonth, taStartYear]);
+
+  // View mode & Calendar
+  const [viewMode, setViewMode] = useState<"table" | "calendar">(() =>
+    typeof window !== "undefined" && window.innerWidth < 640 ? "calendar" : "table"
+  );
+  const [calMonth, setCalMonth] = useState(now.getMonth());
+  const [calYear, setCalYear] = useState(now.getFullYear());
+  const [selectedDay, setSelectedDay] = useState<{ day: number; events: PortalJadwal[] } | null>(null);
+  const [showMonthPicker, setShowMonthPicker] = useState(false);
+
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
-      const [jadwalRes, dashRes] = await Promise.all([
-        portalApi("getJadwal", { unit: unitFilter, bulan, tahun }),
-        portalApi("getDashboard", { bulan, tahun }),
-      ]);
-
-      if (jadwalRes.error) throw new Error(jadwalRes.error);
-      if (dashRes.error) throw new Error(dashRes.error);
-
-      setData(jadwalRes.data || []);
-      setStats(dashRes.stats || null);
+      if (bulan === 0) {
+        // Fetch all months in the TA range
+        const results = await Promise.all(
+          taMonths.map((m) =>
+            Promise.all([
+              portalApi("getJadwal", { unit: unitFilter, bulan: m.month, tahun: m.year }),
+              portalApi("getDashboard", { bulan: m.month, tahun: m.year }),
+            ])
+          )
+        );
+        const allJadwal: PortalJadwal[] = [];
+        const agg: PortalStats = { total: 0, pending: 0, approved: 0, rejected: 0, cancelled: 0, byUnit: {} };
+        for (const [jRes, dRes] of results) {
+          if (jRes.data) allJadwal.push(...jRes.data);
+          if (dRes.stats) {
+            agg.total += dRes.stats.total;
+            agg.pending += dRes.stats.pending;
+            agg.approved += dRes.stats.approved;
+            agg.rejected += dRes.stats.rejected;
+            agg.cancelled += dRes.stats.cancelled;
+            for (const [u, s] of Object.entries(dRes.stats.byUnit as Record<string, { total: number; pending: number; approved: number }>)) {
+              if (!agg.byUnit[u]) agg.byUnit[u] = { total: 0, pending: 0, approved: 0 };
+              agg.byUnit[u].total += s.total;
+              agg.byUnit[u].pending += s.pending;
+              agg.byUnit[u].approved += s.approved;
+            }
+          }
+        }
+        setData(allJadwal);
+        setStats(agg);
+      } else {
+        const [jadwalRes, dashRes] = await Promise.all([
+          portalApi("getJadwal", { unit: unitFilter, bulan, tahun }),
+          portalApi("getDashboard", { bulan, tahun }),
+        ]);
+        if (jadwalRes.error) throw new Error(jadwalRes.error);
+        if (dashRes.error) throw new Error(dashRes.error);
+        setData(jadwalRes.data || []);
+        setStats(dashRes.stats || null);
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Gagal memuat data Portal";
       setError(msg);
     } finally {
       setLoading(false);
     }
-  }, [unitFilter, bulan, tahun]);
+  }, [unitFilter, bulan, tahun, taMonths]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -149,60 +245,77 @@ export default function PortalPage() {
       <div className="bg-white rounded-xl border border-gray-200 p-3 space-y-4 h-fit lg:sticky lg:top-4">
         <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Filter</h3>
 
-        {/* Bulan */}
+        {/* Tahun Ajaran */}
         <div>
-          <label className="text-[11px] font-medium text-gray-400 mb-1 block">Bulan</label>
+          <div className="flex items-center justify-between mb-1">
+            <label className="text-[11px] font-medium text-gray-400">Tahun Ajaran</label>
+            <button
+              onClick={() => setShowTaSettings(!showTaSettings)}
+              className="p-0.5 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <Settings2 size={12} />
+            </button>
+          </div>
+          <p className="text-[10px] font-semibold text-blue-600 mb-1.5">
+            {BULAN_LABELS[taStartMonth]} {taStartYear} — {(() => { let m = taStartMonth + 11; let y = taStartYear; if (m > 12) { m -= 12; y += 1; } return `${BULAN_LABELS[m]} ${y}`; })()}
+          </p>
+          {showTaSettings && (
+            <div className="mb-2 p-2 bg-gray-50 rounded-lg border border-gray-200 space-y-2">
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <label className="text-[10px] text-gray-400 block mb-0.5">Mulai Bulan</label>
+                  <select
+                    value={taStartMonth}
+                    onChange={(e) => {
+                      setTaStartMonth(Number(e.target.value));
+                      setBulan(0);
+                      setPage(0);
+                    }}
+                    className="w-full px-2 py-1 text-[11px] border border-gray-200 rounded-md"
+                  >
+                    {BULAN_LABELS.slice(1).map((b, i) => (
+                      <option key={i + 1} value={i + 1}>{b}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex-1">
+                  <label className="text-[10px] text-gray-400 block mb-0.5">Tahun</label>
+                  <select
+                    value={taStartYear}
+                    onChange={(e) => {
+                      setTaStartYear(Number(e.target.value));
+                      setBulan(0);
+                      setPage(0);
+                    }}
+                    className="w-full px-2 py-1 text-[11px] border border-gray-200 rounded-md"
+                  >
+                    {Array.from({ length: 5 }, (_, i) => now.getFullYear() - 2 + i).map((y) => (
+                      <option key={y} value={y}>{y}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+          )}
           <select
-            value={bulan}
-            onChange={(e) => { setBulan(Number(e.target.value)); setPage(0); }}
+            value={bulan === 0 ? "all" : `${bulan}|${tahun}`}
+            onChange={(e) => {
+              if (e.target.value === "all") {
+                setBulan(0);
+              } else {
+                const [m, y] = e.target.value.split("|").map(Number);
+                setBulan(m);
+                setTahun(y);
+              }
+              setPage(0);
+            }}
             className="w-full px-2.5 py-1.5 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500"
           >
-            {BULAN_LABELS.slice(1).map((b, i) => (
-              <option key={i + 1} value={i + 1}>{b}</option>
+            <option value="all">Semua</option>
+            {taMonths.map((m, i) => (
+              <option key={i} value={`${m.month}|${m.year}`}>{m.label}</option>
             ))}
           </select>
-        </div>
-
-        {/* Unit */}
-        <div>
-          <label className="text-[11px] font-medium text-gray-400 mb-1 block">Unit</label>
-          <div className="flex flex-wrap gap-1">
-            {["ALL", "TK", "SD", "SMP", "TBI"].map((u) => (
-              <button
-                key={u}
-                onClick={() => { setUnitFilter(u); setPage(0); }}
-                className={cn(
-                  "px-2 py-1 text-[10px] font-semibold rounded-md border transition-all",
-                  unitFilter === u
-                    ? "bg-blue-50 text-blue-700 border-blue-200"
-                    : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"
-                )}
-              >
-                {u === "ALL" ? "Semua" : u}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Status */}
-        <div>
-          <label className="text-[11px] font-medium text-gray-400 mb-1 block">Status</label>
-          <div className="flex flex-wrap gap-1">
-            {["all", "pending", "approved", "rejected", "cancelled"].map((s) => (
-              <button
-                key={s}
-                onClick={() => { setStatusFilter(s); setPage(0); }}
-                className={cn(
-                  "px-2 py-1 text-[10px] font-semibold rounded-md border transition-all capitalize",
-                  statusFilter === s
-                    ? "bg-blue-50 text-blue-700 border-blue-200"
-                    : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"
-                )}
-              >
-                {s === "all" ? "Semua" : s}
-              </button>
-            ))}
-          </div>
         </div>
 
         {/* Actions */}
@@ -237,44 +350,92 @@ export default function PortalPage() {
               Portal Jadwal Gedung
             </h1>
             <p className="text-xs text-gray-400 mt-0.5">
-              {BULAN_LABELS[bulan]} {tahun} — Kelola peminjaman gedung
+              TA {BULAN_LABELS[taStartMonth]} {taStartYear} — {bulan === 0 ? "Semua Bulan" : `${BULAN_LABELS[bulan]} ${tahun}`}
             </p>
+          </div>
+          <div className="flex items-center bg-gray-100 rounded-lg p-0.5">
+            <button
+              onClick={() => setViewMode("table")}
+              className={cn(
+                "inline-flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-medium rounded-md transition-all",
+                viewMode === "table"
+                  ? "bg-white text-blue-700 shadow-sm"
+                  : "text-gray-500 hover:text-gray-700"
+              )}
+            >
+              <List size={12} />
+              Tabel
+            </button>
+            <button
+              onClick={() => setViewMode("calendar")}
+              className={cn(
+                "inline-flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-medium rounded-md transition-all",
+                viewMode === "calendar"
+                  ? "bg-white text-blue-700 shadow-sm"
+                  : "text-gray-500 hover:text-gray-700"
+              )}
+            >
+              <CalendarDays size={12} />
+              Kalender
+            </button>
           </div>
         </div>
 
-        {/* Stats */}
+        {/* Stats - Interactive as filters */}
         {stats && (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {[
-              { label: "Total", value: stats.total, icon: CalendarDays, color: "text-gray-600", bg: "bg-gray-50" },
-              { label: "Pending", value: stats.pending, icon: Clock, color: "text-amber-600", bg: "bg-amber-50" },
-              { label: "Disetujui", value: stats.approved, icon: CheckCircle, color: "text-emerald-600", bg: "bg-emerald-50" },
-              { label: "Ditolak", value: stats.rejected, icon: XCircle, color: "text-red-600", bg: "bg-red-50" },
-            ].map((s) => (
-              <div key={s.label} className={cn("rounded-xl border border-gray-200 p-3", s.bg)}>
-                <div className="flex items-center gap-1.5 mb-1">
-                  <s.icon size={14} className={s.color} />
-                  <span className="text-[11px] font-medium text-gray-500">{s.label}</span>
-                </div>
-                <p className={cn("text-xl font-bold", s.color)}>{s.value}</p>
-              </div>
-            ))}
+              { label: "Total", value: stats.total, icon: CalendarDays, color: "text-gray-600", bg: "bg-gray-50", borderActive: "border-gray-400", filterVal: "all" },
+              { label: "Pending", value: stats.pending, icon: Clock, color: "text-amber-600", bg: "bg-amber-50", borderActive: "border-amber-400", filterVal: "pending" },
+              { label: "Disetujui", value: stats.approved, icon: CheckCircle, color: "text-emerald-600", bg: "bg-emerald-50", borderActive: "border-emerald-400", filterVal: "approved" },
+              { label: "Ditolak", value: stats.rejected, icon: XCircle, color: "text-red-600", bg: "bg-red-50", borderActive: "border-red-400", filterVal: "rejected" },
+            ].map((s) => {
+              const isActive = statusFilter === s.filterVal;
+              return (
+                <button
+                  key={s.label}
+                  type="button"
+                  onClick={() => { setStatusFilter(s.filterVal); setPage(0); }}
+                  className={cn(
+                    "rounded-xl border-2 p-3 transition-all cursor-pointer text-left",
+                    isActive ? `${s.bg} ${s.borderActive} shadow-sm` : "bg-white border-gray-200 hover:border-gray-300"
+                  )}
+                >
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <s.icon size={14} className={s.color} />
+                    <span className="text-[11px] font-medium text-gray-500">{s.label}</span>
+                  </div>
+                  <p className={cn("text-xl font-bold", s.color)}>{s.value}</p>
+                </button>
+              );
+            })}
           </div>
         )}
 
-        {/* Unit Stats */}
+        {/* Unit Stats - Interactive as filters */}
         {stats && (
           <div className="grid grid-cols-4 gap-2">
-            {["TK", "SD", "SMP", "TBI"].map((u) => (
-              <div key={u} className="bg-white rounded-xl border border-gray-200 p-2.5 text-center">
-                <div
-                  className="w-2 h-2 rounded-full mx-auto mb-1"
-                  style={{ backgroundColor: UNIT_COLORS[u] }}
-                />
-                <p className="text-[11px] font-semibold text-gray-700">{u}</p>
-                <p className="text-xs text-gray-400">{stats.byUnit[u]?.total || 0} jadwal</p>
-              </div>
-            ))}
+            {["TK", "SD", "SMP", "TBI"].map((u) => {
+              const isActive = unitFilter === u;
+              return (
+                <button
+                  key={u}
+                  type="button"
+                  onClick={() => { setUnitFilter(isActive ? "ALL" : u); setPage(0); }}
+                  className={cn(
+                    "bg-white rounded-xl border-2 p-2.5 text-center transition-all cursor-pointer",
+                    isActive ? "border-blue-400 bg-blue-50 shadow-sm" : "border-gray-200 hover:border-gray-300"
+                  )}
+                >
+                  <div
+                    className="w-2 h-2 rounded-full mx-auto mb-1"
+                    style={{ backgroundColor: UNIT_COLORS[u] }}
+                  />
+                  <p className="text-[11px] font-semibold text-gray-700">{u}</p>
+                  <p className="text-xs text-gray-400">{stats.byUnit[u]?.total || 0} jadwal</p>
+                </button>
+              );
+            })}
           </div>
         )}
 
@@ -325,7 +486,7 @@ export default function PortalPage() {
         )}
 
         {/* Data Table */}
-        {!loading && !error && (
+        {!loading && !error && viewMode === "table" && (
           <>
             {/* Desktop Table */}
             <div className="hidden sm:block bg-white rounded-xl border border-gray-200 overflow-hidden">
@@ -500,6 +661,211 @@ export default function PortalPage() {
               </div>
             )}
           </>
+        )}
+
+        {/* Calendar View */}
+        {!loading && !error && viewMode === "calendar" && (
+          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            {/* Calendar Navigation */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-gray-50/50">
+              <button
+                onClick={() => {
+                  if (calMonth === 0) { setCalMonth(11); setCalYear(calYear - 1); }
+                  else { setCalMonth(calMonth - 1); }
+                  setSelectedDay(null);
+                }}
+                className="p-2 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+              >
+                <ChevronLeft size={18} />
+              </button>
+              <div className="flex items-center gap-3 relative">
+                <button
+                  onClick={() => setShowMonthPicker(!showMonthPicker)}
+                  className="text-sm sm:text-base font-semibold text-gray-900 hover:text-blue-600 transition-colors cursor-pointer"
+                >
+                  {CAL_MONTH_NAMES[calMonth]} {calYear} ▾
+                </button>
+                {showMonthPicker && (
+                  <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 z-50 bg-white rounded-xl shadow-xl border border-gray-200 p-3 w-[260px]">
+                    <div className="flex items-center justify-between mb-3">
+                      <button onClick={() => setCalYear(calYear - 1)} className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-700">
+                        <ChevronLeft size={16} />
+                      </button>
+                      <span className="text-sm font-semibold text-gray-800">{calYear}</span>
+                      <button onClick={() => setCalYear(calYear + 1)} className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-700">
+                        <ChevronRight size={16} />
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {CAL_MONTH_NAMES.map((name, i) => {
+                        const isCurrentMonth = i === now.getMonth() && calYear === now.getFullYear();
+                        const isSelected = i === calMonth;
+                        return (
+                          <button
+                            key={name}
+                            onClick={() => {
+                              setCalMonth(i);
+                              setShowMonthPicker(false);
+                              setSelectedDay(null);
+                            }}
+                            className={cn(
+                              "px-2 py-1.5 rounded-lg text-xs font-medium transition-colors",
+                              isSelected
+                                ? "bg-blue-600 text-white"
+                                : isCurrentMonth
+                                  ? "bg-blue-50 text-blue-700 font-semibold"
+                                  : "text-gray-600 hover:bg-gray-100"
+                            )}
+                          >
+                            {name.slice(0, 3)}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+                <button
+                  onClick={() => {
+                    setCalMonth(now.getMonth());
+                    setCalYear(now.getFullYear());
+                    setSelectedDay(null);
+                  }}
+                  className="px-2 py-0.5 sm:px-2.5 sm:py-1 text-[10px] sm:text-xs font-medium text-blue-600 bg-blue-50 rounded-md hover:bg-blue-100 transition-colors"
+                >
+                  Hari Ini
+                </button>
+              </div>
+              <button
+                onClick={() => {
+                  if (calMonth === 11) { setCalMonth(0); setCalYear(calYear + 1); }
+                  else { setCalMonth(calMonth + 1); }
+                  setSelectedDay(null);
+                }}
+                className="p-2 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+              >
+                <ChevronRight size={18} />
+              </button>
+            </div>
+
+            {/* Close month picker on outside click */}
+            {showMonthPicker && (
+              <div className="fixed inset-0 z-40" onClick={() => setShowMonthPicker(false)} />
+            )}
+
+            {/* Calendar Grid */}
+            <div className="w-full overflow-hidden">
+              <div className="grid grid-cols-7 w-full">
+                {CAL_DAY_HEADERS.map((day, dayIdx) => (
+                  <div
+                    key={day}
+                    className={cn(
+                      "py-1.5 sm:py-2 text-center text-[10px] sm:text-xs font-semibold border-b border-gray-100 uppercase tracking-wide whitespace-nowrap",
+                      dayIdx >= 5 ? "text-red-600" : "text-gray-500"
+                    )}
+                  >
+                    {day}
+                  </div>
+                ))}
+
+                {getDaysInMonthGrid(calMonth, calYear).map((day, idx) => {
+                  const dayEvents = day
+                    ? filteredData.filter((item: PortalJadwal) => portalDateMatches(item, day, calMonth, calYear))
+                    : [];
+                  const today = new Date();
+                  const isToday = day === today.getDate() && calMonth === today.getMonth() && calYear === today.getFullYear();
+
+                  return (
+                    <div
+                      key={idx}
+                      onClick={() => {
+                        if (day && dayEvents.length > 0) {
+                          setSelectedDay({ day, events: dayEvents });
+                        }
+                      }}
+                      className={cn(
+                        "min-h-[60px] sm:min-h-[110px] border-b border-r border-gray-100 p-0.5 sm:p-1.5 transition-colors min-w-0 overflow-hidden",
+                        !day && "bg-gray-50/50",
+                        day && "hover:bg-gray-50/80",
+                        day && dayEvents.length > 0 && "cursor-pointer",
+                        idx % 7 === 0 && "border-l-0",
+                        idx % 7 === 6 && "border-r-0"
+                      )}
+                    >
+                      {day && (
+                        <>
+                          <div className="flex items-center justify-between mb-1">
+                            <span
+                              className={cn(
+                                "inline-flex items-center justify-center w-5 h-5 sm:w-7 sm:h-7 rounded-full text-[10px] sm:text-xs font-semibold",
+                                isToday
+                                  ? "bg-blue-600 text-white ring-2 ring-blue-200"
+                                  : "text-gray-700"
+                              )}
+                            >
+                              {day}
+                            </span>
+                            {dayEvents.length > 0 && (
+                              <span className="text-[9px] font-medium text-gray-400 hidden sm:inline">{dayEvents.length}</span>
+                            )}
+                          </div>
+
+                          {/* Desktop: Show pills */}
+                          <div className="hidden sm:flex flex-col gap-0.5 min-w-0 overflow-hidden">
+                            {dayEvents.slice(0, 3).map((evt, eIdx) => (
+                              <div
+                                key={`${evt.unit}-${evt.row}-${eIdx}`}
+                                className="w-full text-left px-1.5 py-0.5 rounded text-[10px] font-medium truncate border min-w-0"
+                                style={{
+                                  backgroundColor: `${UNIT_COLORS[evt.unit] || "#6b7280"}15`,
+                                  color: UNIT_COLORS[evt.unit] || "#6b7280",
+                                  borderColor: `${UNIT_COLORS[evt.unit] || "#6b7280"}30`,
+                                }}
+                                title={`${evt.acara} (${evt.unit})`}
+                              >
+                                <span className="truncate">{evt.acara.length > 18 ? evt.acara.slice(0, 18) + "..." : evt.acara}</span>
+                              </div>
+                            ))}
+                            {dayEvents.length > 3 && (
+                              <span className="text-[10px] text-gray-400 pl-1">+{dayEvents.length - 3} lagi</span>
+                            )}
+                          </div>
+
+                          {/* Mobile: Show colored dots */}
+                          <div className="sm:hidden">
+                            {dayEvents.length > 0 && (
+                              <div className="flex flex-wrap gap-0.5 mt-0.5 justify-center">
+                                {dayEvents.slice(0, 5).map((evt, eIdx) => (
+                                  <span
+                                    key={`${evt.unit}-${evt.row}-${eIdx}`}
+                                    className={cn("w-2.5 h-2.5 rounded-full shrink-0", getUnitDotColor(evt.unit))}
+                                    title={`${evt.acara} (${evt.unit})`}
+                                  />
+                                ))}
+                                {dayEvents.length > 5 && (
+                                  <span className="text-[8px] text-gray-400 font-medium leading-none self-center">{dayEvents.length - 5}+</span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Legend */}
+            <div className="flex flex-wrap items-center gap-3 px-4 py-2.5 border-t border-gray-100 bg-gray-50/50">
+              <span className="text-[10px] text-gray-400 font-medium">Unit:</span>
+              {Object.entries(UNIT_COLORS).map(([unit, color]) => (
+                <span key={unit} className="inline-flex items-center gap-1">
+                  <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />
+                  <span className="text-[10px] text-gray-500">{unit}</span>
+                </span>
+              ))}
+            </div>
+          </div>
         )}
       </div>
     </div>

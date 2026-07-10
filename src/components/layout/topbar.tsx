@@ -2,7 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import Link from "next/link";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Settings } from "lucide-react";
 
 const routeLabels: Record<string, string> = {
   dashboard: "Dashboard",
@@ -17,6 +17,9 @@ const routeLabels: Record<string, string> = {
   export: "Export",
   "import-data": "Import Data",
   setting: "Setting",
+  portal: "Portal Gedung",
+  jadwal: "Jadwal",
+  profil: "Profil",
 };
 
 export function Topbar() {
@@ -24,9 +27,9 @@ export function Topbar() {
   const segments = pathname.split("/").filter(Boolean);
 
   return (
-    <header className="sticky top-0 z-30 flex items-center h-14 px-4 lg:px-6 bg-white border-b border-slate-200">
+    <header className="sticky top-0 z-30 flex items-center justify-between h-14 px-4 lg:px-6 bg-white border-b border-slate-200">
       {/* Breadcrumb */}
-      <nav className="flex items-center gap-1 text-sm">
+      <nav className="flex items-center gap-1 text-sm min-w-0">
         <Link
           href="/dashboard"
           className="text-slate-500 hover:text-slate-700 transition-colors"
@@ -55,6 +58,15 @@ export function Topbar() {
           );
         })}
       </nav>
+
+      {/* Settings icon for mobile */}
+      <Link
+        href="/profil"
+        className="lg:hidden flex items-center justify-center w-9 h-9 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-colors"
+        title="Profil & Pengaturan"
+      >
+        <Settings className="w-5 h-5" />
+      </Link>
     </header>
   );
 }

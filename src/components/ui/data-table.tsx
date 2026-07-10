@@ -9,6 +9,7 @@ export interface Column<T> {
   header: string;
   width?: string;
   align?: 'left' | 'center' | 'right';
+  className?: string;
   render?: (row: T) => React.ReactNode;
 }
 
@@ -98,7 +99,8 @@ export function DataTable<T extends Record<string, unknown>>({
                     col.align === 'center' && 'text-center',
                     col.align === 'right' && 'text-right',
                     col.align === 'left' && 'text-left',
-                    !col.align && 'text-left'
+                    !col.align && 'text-left',
+                    col.className
                   )}
                   style={{ width: col.width }}
                 >
@@ -149,7 +151,8 @@ export function DataTable<T extends Record<string, unknown>>({
                           'text-sm text-gray-700',
                           compact ? 'px-3 py-2' : 'px-4 py-3',
                           col.align === 'center' && 'text-center',
-                          col.align === 'right' && 'text-right'
+                          col.align === 'right' && 'text-right',
+                          col.className
                         )}
                       >
                         {col.render ? col.render(row) : String(row[col.key] ?? '')}
