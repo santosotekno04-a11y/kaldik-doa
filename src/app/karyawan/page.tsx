@@ -18,10 +18,12 @@ const BULAN_NAMES = [
 ];
 
 function parseCSV(text: string): { headers: string[]; rows: string[][] } {
-  const lines = text.trim().split('\n').filter(l => l.trim());
+  // Remove BOM and normalize line endings
+  const cleaned = text.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  const lines = cleaned.trim().split('\n').filter(l => l.trim());
   if (lines.length === 0) return { headers: [], rows: [] };
   const firstLine = lines[0];
-  const delimiter = firstLine.includes(';') ? ';' : firstLine.includes('\t') ? '\t' : ',';
+  const delimiter = firstLine.includes('\t') ? '\t' : firstLine.includes(';') ? ';' : ',';
   const parseRow = (line: string): string[] => {
     const result: string[] = [];
     let current = '';
@@ -39,16 +41,20 @@ function parseCSV(text: string): { headers: string[]; rows: string[][] } {
 
 function parseImportDate(text: string): string | null {
   if (!text) return null;
-  const cleaned = text.trim();
-  // DD/MM/YYYY or DD-MM-YYYY
-  const match1 = cleaned.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
-  if (match1) {
-    const [, d, m, y] = match1;
+  const cleaned = text.trim().replace(/\u00A0/g, ' ');
+  if (!cleaned) return null;
+  // YYYY-MM-DD (with optional time part)
+  const matchISO = cleaned.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (matchISO) {
+    const [, y, m, d] = matchISO;
     return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
   }
-  // YYYY-MM-DD
-  const match2 = cleaned.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (match2) return cleaned;
+  // DD/MM/YYYY or DD-MM-YYYY
+  const matchDMY = cleaned.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if (matchDMY) {
+    const [, d, m, y] = matchDMY;
+    return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+  }
   return null;
 }
 
@@ -323,10 +329,12 @@ export default function KaryawanPage() {
     setCsvHeaders(headers);
     setCsvRows(rows);
     // Auto-detect mapping using strict KARYAWAN_IMPORT_MAP
+    // Normalize headers: lowercase, trim, replace non-breaking spaces
+    const normalizeHeader = (h: string) => h.toLowerCase().trim().replace(/\u00A0/g, ' ').replace(/\s+/g, ' ');
     const mapping: Record<string, string> = {};
     headers.forEach(h => {
-      const lower = h.toLowerCase().trim();
-      if (KARYAWAN_IMPORT_MAP[lower]) mapping[h] = KARYAWAN_IMPORT_MAP[lower];
+      const normalized = normalizeHeader(h);
+      if (KARYAWAN_IMPORT_MAP[normalized]) mapping[h] = KARYAWAN_IMPORT_MAP[normalized];
     });
     setHeaderMapping(mapping);
 
