@@ -5,7 +5,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Building2, RefreshCw, CheckCircle, XCircle, Clock, Ban,
   ExternalLink, Filter, Loader2, AlertCircle, ChevronLeft, ChevronRight,
-  Users, CalendarDays, Settings2, List
+  Users, CalendarDays, Settings2, List, X
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 
@@ -864,6 +864,50 @@ export default function PortalPage() {
                   <span className="text-[10px] text-gray-500">{unit}</span>
                 </span>
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* Day Detail Popup (mobile + desktop) */}
+        {selectedDay && (
+          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40" onClick={() => setSelectedDay(null)}>
+            <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md max-h-[80vh] overflow-y-auto shadow-xl" onClick={(e) => e.stopPropagation()}>
+              <div className="sticky top-0 bg-white px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+                <h3 className="text-sm font-bold text-gray-900">
+                  {calMonth !== undefined && BULAN_LABELS[calMonth + 1]} {calYear} — Tanggal {selectedDay.day}
+                </h3>
+                <button onClick={() => setSelectedDay(null)} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400">
+                  <X size={16} />
+                </button>
+              </div>
+              <div className="p-4 space-y-2.5">
+                {selectedDay.events.map((evt, idx) => (
+                  <div key={`${evt.unit}-${evt.row}-${idx}`} className="p-3 rounded-xl border border-gray-200 bg-gray-50/50">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold text-white"
+                        style={{ backgroundColor: UNIT_COLORS[evt.unit] || "#6b7280" }}
+                      >
+                        {evt.unit}
+                      </span>
+                      <span className={cn(
+                        "px-1.5 py-0.5 rounded text-[10px] font-semibold",
+                        evt.status === "Approved" ? "bg-emerald-50 text-emerald-700" :
+                        evt.status === "Pending" ? "bg-amber-50 text-amber-700" :
+                        "bg-red-50 text-red-700"
+                      )}>
+                        {evt.status}
+                      </span>
+                    </div>
+                    <p className="text-sm font-semibold text-gray-900">{evt.acara}</p>
+                    <div className="mt-1.5 space-y-0.5 text-xs text-gray-500">
+                      <p>{evt.tanggalDisplay || evt.tanggal}</p>
+                      <p>{evt.jam} {evt.jamMulai && evt.jamSelesai ? `(${evt.jamMulai} - ${evt.jamSelesai})` : ""}</p>
+                      {evt.hadirin > 0 && <p>{evt.hadirin} hadirin</p>}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         )}

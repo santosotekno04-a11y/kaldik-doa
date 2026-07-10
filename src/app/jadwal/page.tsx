@@ -738,18 +738,33 @@ export default function JadwalPage() {
                   </>
                 ) : (
                   <>
-                    <DetailField label="BULAN" value={(detailRow as HolyMorningRow).bulan} />
-                    <DetailField label="TANGGAL" value={(detailRow as HolyMorningRow).tanggal} />
-                    <DetailField label="CHRISTIAN WORLDVIEW" value={(detailRow as HolyMorningRow).christian_worldview} />
-                    <DetailField label="PROFIL" value={(detailRow as HolyMorningRow).profil} />
-                    <DetailField label="BESTRA" value={(detailRow as HolyMorningRow).bestra} />
-                    <DetailField label="KARAKTER" value={(detailRow as HolyMorningRow).karakter} />
-                    <DetailField label="TEMA BULANAN" value={(detailRow as HolyMorningRow).tema_bulanan} />
-                    <DetailField label="TEMA MINGGUAN" value={(detailRow as HolyMorningRow).tema_mingguan} />
-                    <DetailField label="NAS ALKITAB" value={(detailRow as HolyMorningRow).nas_alkitab} />
-                    <DetailField label="TUJUAN" value={(detailRow as HolyMorningRow).tujuan} />
-                    <DetailField label="PELAYAN HOLY MORNING" value={(detailRow as HolyMorningRow).pelayan_holy_morning} />
-                    <DetailField label="KETERANGAN" value={(detailRow as HolyMorningRow).keterangan} />
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 px-4 pb-4">
+                      <DetailField label="BULAN" value={(detailRow as HolyMorningRow).bulan} />
+                      <DetailField label="TANGGAL" value={(detailRow as HolyMorningRow).tanggal} />
+                    </div>
+                    <div className="px-4 pb-1">
+                      <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-0.5">TEMA BULANAN</p>
+                      <p className="text-sm font-medium text-gray-800">{(detailRow as HolyMorningRow).tema_bulanan || '—'}</p>
+                    </div>
+                    <div className="px-4 pb-1">
+                      <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-0.5">NAS ALKITAB</p>
+                      <p className="text-sm font-medium text-gray-800">{(detailRow as HolyMorningRow).nas_alkitab || '—'}</p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 px-4 pb-1">
+                      <DetailField label="CHRISTIAN WORLDVIEW" value={(detailRow as HolyMorningRow).christian_worldview} />
+                      <DetailField label="PROFIL" value={(detailRow as HolyMorningRow).profil} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 px-4 pb-1">
+                      <DetailField label="BESTRA" value={(detailRow as HolyMorningRow).bestra} />
+                      <DetailField label="KARAKTER" value={(detailRow as HolyMorningRow).karakter} />
+                    </div>
+                    <div className="px-4 pb-1">
+                      <DetailField label="TUJUAN" value={(detailRow as HolyMorningRow).tujuan} />
+                    </div>
+                    <div className="px-4 pb-2">
+                      <p className="text-[10px] font-bold text-red-600 uppercase tracking-wider mb-0.5">PELAYAN HOLY MORNING</p>
+                      <p className="text-sm font-bold text-red-700">{(detailRow as HolyMorningRow).pelayan_holy_morning || '—'}</p>
+                    </div>
                   </>
                 )}
                 {(() => {

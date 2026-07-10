@@ -321,36 +321,37 @@ function MobileKaldikList({
               )}
             </div>
 
-            {/* Row 4: Actions */}
+            {/* Row 4: Actions — icon only below unit */}
             <div className="flex items-center gap-1 mt-2 pt-2 border-t border-gray-100">
               <button
                 onClick={() => onEdit(item)}
-                className="flex-1 flex items-center justify-center gap-1 py-1.5 text-[11px] font-medium text-indigo-600 bg-indigo-50 rounded-lg hover:bg-indigo-100 transition-colors"
+                className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                title="Edit"
               >
-                <Edit2 size={12} />
-                Edit
+                <Edit2 size={14} />
               </button>
               <button
                 onClick={() => onDuplicate(item)}
-                className="flex-1 flex items-center justify-center gap-1 py-1.5 text-[11px] font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
+                className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                title="Duplikat"
               >
-                <Copy size={12} />
-                Duplikat
+                <Copy size={14} />
               </button>
               {item.status !== "Dibatalkan" && (
                 <button
                   onClick={() => onCancel(item)}
-                  className="flex-1 flex items-center justify-center gap-1 py-1.5 text-[11px] font-medium text-amber-600 bg-amber-50 rounded-lg hover:bg-amber-100 transition-colors"
+                  className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
+                  title="Batalkan"
                 >
-                  <XCircle size={12} />
-                  Batal
+                  <XCircle size={14} />
                 </button>
               )}
               <button
                 onClick={() => onDelete(item)}
-                className="flex items-center justify-center p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                title="Hapus"
               >
-                <Trash2 size={12} />
+                <Trash2 size={14} />
               </button>
             </div>
           </div>
