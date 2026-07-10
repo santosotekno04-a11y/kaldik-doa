@@ -1,4 +1,5 @@
 "use client";
+export const dynamic = 'force-dynamic';
 
 import { useState, useEffect, useCallback } from "react";
 import { BookHeart, Sparkles, Save, Calendar, ChevronDown, ChevronUp, Check, Loader2 } from "lucide-react";
