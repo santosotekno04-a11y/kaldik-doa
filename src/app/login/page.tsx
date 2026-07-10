@@ -2,6 +2,7 @@
 export const dynamic = 'force-dynamic';
 
 import { useState, useEffect, useRef } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Lock, Loader2, Eye, EyeOff } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
@@ -95,8 +96,15 @@ export default function LoginPage() {
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
           {/* Header */}
           <div className="px-6 pt-8 pb-4 text-center">
-            <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-indigo-50 flex items-center justify-center">
-              <Lock className="w-8 h-8 text-indigo-600" />
+            <div className="w-20 h-20 mx-auto mb-4 rounded-2xl overflow-hidden">
+              <Image
+                src="/logo-tbi.png"
+                alt="Logo TBI"
+                width={80}
+                height={80}
+                className="w-full h-full object-contain"
+                priority
+              />
             </div>
             <h1 className="text-xl font-bold text-slate-900">{appName}</h1>
             <p className="text-sm text-slate-500 mt-1">

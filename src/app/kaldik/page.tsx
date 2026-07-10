@@ -120,17 +120,25 @@ function getDaysInMonthGrid(month: number, year: number) {
   return days;
 }
 
-function getKategoriPillColor(kategori: string) {
-  switch (kategori) {
-    case "Ibadah":
-      return "bg-purple-100 text-purple-700 border-purple-200";
-    case "Ujian":
-      return "bg-red-100 text-red-700 border-red-200";
-    case "Libur":
-      return "bg-green-100 text-green-700 border-green-200";
-    default:
-      return "bg-indigo-100 text-indigo-700 border-indigo-200";
-  }
+function getUnitColor(unitName: string | undefined): string {
+  const colors: Record<string, string> = {
+    'SD': 'bg-blue-100 text-blue-800 border-blue-200',
+    'SMP': 'bg-purple-100 text-purple-800 border-purple-200',
+    'TK': 'bg-rose-100 text-rose-800 border-rose-200',
+    'TBI': 'bg-teal-100 text-teal-800 border-teal-200',
+    'Manajemen': 'bg-emerald-100 text-emerald-800 border-emerald-200',
+    'Universal': 'bg-gray-100 text-gray-800 border-gray-200',
+  };
+  return colors[unitName || ''] || 'bg-indigo-100 text-indigo-800 border-indigo-200';
+}
+
+function isHoliday(day: number | null, month: number, year: number, holidays: Set<string>): boolean {
+  if (!day) return false;
+  const date = new Date(year, month, day);
+  const dow = date.getDay(); // 0=Sun, 6=Sat
+  if (dow === 0 || dow === 6) return true;
+  const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  return holidays.has(dateStr);
 }
 
 function getDefaultFormData(): FormData {
@@ -177,6 +185,10 @@ export default function KaldikPage() {
   const [calMonth, setCalMonth] = useState(new Date().getMonth());
   const [calYear, setCalYear] = useState(new Date().getFullYear());
   const [expandedDay, setExpandedDay] = useState<string | null>(null);
+  const [holidays, setHolidays] = useState<Set<string>>(new Set());
+  const [selectedDay, setSelectedDay] = useState<{ day: number; events: KaldikWithUnit[] } | null>(null);
+  const [showMonthPicker, setShowMonthPicker] = useState(false);
+  const [calendarUnitFilter, setCalendarUnitFilter] = useState<string | null>(null);
 
   // ── Selection & Bulk ───────────────────────────────────────
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -272,6 +284,19 @@ export default function KaldikPage() {
     }
   }, [tahunAjaran, addToast]);
 
+  const fetchHolidays = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('hari_khusus')
+        .select('tanggal, nama_hari');
+      if (error) throw error;
+      const dateSet = new Set<string>((data || []).map((h: { tanggal: string }) => h.tanggal));
+      setHolidays(dateSet);
+    } catch (err) {
+      console.error('Gagal memuat hari khusus:', err);
+    }
+  }, []);
+
   useEffect(() => {
     fetchUnits();
   }, [fetchUnits]);
@@ -279,6 +304,10 @@ export default function KaldikPage() {
   useEffect(() => {
     fetchKaldik();
   }, [fetchKaldik]);
+
+  useEffect(() => {
+    fetchHolidays();
+  }, [fetchHolidays]);
 
   // ── Form Helpers ───────────────────────────────────────────
   const openCreateForm = useCallback(() => {
@@ -875,21 +904,75 @@ export default function KaldikPage() {
                       setCalMonth(calMonth - 1);
                     }
                     setExpandedDay(null);
+                    setSelectedDay(null);
                   }}
                   className="p-2 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
                 >
                   <CalChevronLeft size={18} />
                 </button>
-                <div className="flex items-center gap-3">
-                  <h3 className="text-base font-semibold text-gray-900">
-                    {CAL_MONTH_NAMES[calMonth]} {calYear}
-                  </h3>
+                <div className="flex items-center gap-3 relative">
+                  <button
+                    onClick={() => setShowMonthPicker(!showMonthPicker)}
+                    className="text-base font-semibold text-gray-900 hover:text-indigo-600 transition-colors cursor-pointer"
+                  >
+                    {CAL_MONTH_NAMES[calMonth]} {calYear} ▾
+                  </button>
+                  {showMonthPicker && (
+                    <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 z-50 bg-white rounded-xl shadow-xl border border-gray-200 p-3 w-[260px]">
+                      {/* Year selector */}
+                      <div className="flex items-center justify-between mb-3">
+                        <button
+                          onClick={() => setCalYear(calYear - 1)}
+                          className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-700"
+                        >
+                          <CalChevronLeft size={16} />
+                        </button>
+                        <span className="text-sm font-semibold text-gray-800">{calYear}</span>
+                        <button
+                          onClick={() => setCalYear(calYear + 1)}
+                          className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-700"
+                        >
+                          <CalChevronRight size={16} />
+                        </button>
+                      </div>
+                      {/* Month grid */}
+                      <div className="grid grid-cols-3 gap-1.5">
+                        {CAL_MONTH_NAMES.map((name, i) => {
+                          const now = new Date();
+                          const isCurrentMonth = i === now.getMonth() && calYear === now.getFullYear();
+                          const isSelected = i === calMonth;
+                          return (
+                            <button
+                              key={name}
+                              onClick={() => {
+                                setCalMonth(i);
+                                setShowMonthPicker(false);
+                                setExpandedDay(null);
+                                setSelectedDay(null);
+                              }}
+                              className={cn(
+                                "px-2 py-1.5 rounded-lg text-xs font-medium transition-colors",
+                                isSelected
+                                  ? "bg-indigo-600 text-white"
+                                  : isCurrentMonth
+                                    ? "bg-indigo-50 text-indigo-700 font-semibold"
+                                    : "text-gray-600 hover:bg-gray-100"
+                              )}
+                            >
+                              {name.slice(0, 3)}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                   <button
                     onClick={() => {
                       const now = new Date();
                       setCalMonth(now.getMonth());
                       setCalYear(now.getFullYear());
                       setExpandedDay(null);
+                      setSelectedDay(null);
                     }}
                     className="px-2.5 py-1 text-xs font-medium text-indigo-600 bg-indigo-50 rounded-md hover:bg-indigo-100 transition-colors"
                   >
@@ -905,6 +988,7 @@ export default function KaldikPage() {
                       setCalMonth(calMonth + 1);
                     }
                     setExpandedDay(null);
+                    setSelectedDay(null);
                   }}
                   className="p-2 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
                 >
@@ -912,13 +996,56 @@ export default function KaldikPage() {
                 </button>
               </div>
 
+              {/* Close month picker on outside click */}
+              {showMonthPicker && (
+                <div
+                  className="fixed inset-0 z-40"
+                  onClick={() => setShowMonthPicker(false)}
+                />
+              )}
+
+              {/* Unit Filter Chips */}
+              <div className="flex flex-wrap items-center gap-2 px-4 py-2.5 border-b border-gray-100 bg-gray-50/30">
+                <span className="text-[10px] text-gray-400 font-medium mr-1">Filter Unit:</span>
+                <button
+                  onClick={() => setCalendarUnitFilter(null)}
+                  className={cn(
+                    "px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors",
+                    calendarUnitFilter === null
+                      ? "bg-indigo-600 text-white border-indigo-600"
+                      : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
+                  )}
+                >
+                  Semua
+                </button>
+                {['Universal', 'TK', 'SD', 'SMP', 'Manajemen', 'TBI'].map((unitName) => (
+                  <button
+                    key={unitName}
+                    onClick={() =>
+                      setCalendarUnitFilter(calendarUnitFilter === unitName ? null : unitName)
+                    }
+                    className={cn(
+                      "px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors",
+                      calendarUnitFilter === unitName
+                        ? getUnitColor(unitName)
+                        : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
+                    )}
+                  >
+                    {unitName}
+                  </button>
+                ))}
+              </div>
+
               {/* Calendar Grid */}
               <div className="grid grid-cols-7">
                 {/* Day Headers */}
-                {CAL_DAY_HEADERS.map((day) => (
+                {CAL_DAY_HEADERS.map((day, dayIdx) => (
                   <div
                     key={day}
-                    className="py-2 text-center text-xs font-semibold text-gray-500 border-b border-gray-100 uppercase tracking-wide"
+                    className={cn(
+                      "py-2 text-center text-xs font-semibold border-b border-gray-100 uppercase tracking-wide",
+                      dayIdx >= 5 ? "text-red-600" : "text-gray-500"
+                    )}
                   >
                     {day}
                   </div>
@@ -929,8 +1056,11 @@ export default function KaldikPage() {
                   const dateStr = day
                     ? `${calYear}-${String(calMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`
                     : "";
+                  const calendarFilteredData = calendarUnitFilter
+                    ? filteredData.filter((k: KaldikWithUnit) => k.unit?.name === calendarUnitFilter)
+                    : filteredData;
                   const dayEvents = day
-                    ? filteredData.filter(
+                    ? calendarFilteredData.filter(
                         (k: KaldikWithUnit) =>
                           k.tanggal_mulai === dateStr ||
                           (k.tanggal_mulai && k.tanggal_mulai <= dateStr &&
@@ -942,17 +1072,24 @@ export default function KaldikPage() {
                     day === today.getDate() &&
                     calMonth === today.getMonth() &&
                     calYear === today.getFullYear();
-                  const isWeekend = idx % 7 >= 5;
+                  const dayIsHoliday = isHoliday(day, calMonth, calYear, holidays);
                   const expandKey = dateStr;
                   const isExpanded = expandedDay === expandKey;
 
                   return (
                     <div
                       key={idx}
+                      onClick={() => {
+                        if (day && dayEvents.length > 0) {
+                          setSelectedDay({ day, events: dayEvents });
+                        }
+                      }}
                       className={cn(
                         "min-h-[90px] sm:min-h-[110px] border-b border-r border-gray-100 p-1 sm:p-1.5 transition-colors",
                         !day && "bg-gray-50/50",
-                        day && "hover:bg-gray-50/80",
+                        day && dayIsHoliday && "bg-red-50",
+                        day && !dayIsHoliday && "hover:bg-gray-50/80",
+                        day && dayEvents.length > 0 && "cursor-pointer",
                         idx % 7 === 0 && "border-l-0",
                         idx % 7 === 6 && "border-r-0"
                       )}
@@ -966,8 +1103,8 @@ export default function KaldikPage() {
                                 "inline-flex items-center justify-center w-6 h-6 sm:w-7 sm:h-7 rounded-full text-xs font-semibold",
                                 isToday
                                   ? "bg-indigo-600 text-white ring-2 ring-indigo-200"
-                                  : isWeekend
-                                    ? "text-gray-400"
+                                  : dayIsHoliday
+                                    ? "text-red-600 font-bold"
                                     : "text-gray-700"
                               )}
                             >
@@ -983,22 +1120,18 @@ export default function KaldikPage() {
                           {/* Desktop: Show pills */}
                           <div className="hidden sm:flex flex-col gap-0.5">
                             {dayEvents.slice(0, 3).map((evt: KaldikWithUnit) => (
-                              <button
+                              <div
                                 key={evt.id}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  openEditForm(evt);
-                                }}
                                 className={cn(
-                                  "w-full text-left px-1.5 py-0.5 rounded text-[10px] font-medium truncate border transition-colors hover:opacity-80 cursor-pointer",
-                                  getKategoriPillColor(evt.kategori)
+                                  "w-full text-left px-1.5 py-0.5 rounded text-[10px] font-medium truncate border",
+                                  getUnitColor(evt.unit?.name)
                                 )}
-                                title={`${evt.nama_kegiatan} (${evt.kategori})`}
+                                title={`${evt.nama_kegiatan} (${evt.unit?.name || '-'})`}
                               >
                                 {evt.nama_kegiatan.length > 20
                                   ? evt.nama_kegiatan.slice(0, 20) + "…"
                                   : evt.nama_kegiatan}
-                              </button>
+                              </div>
                             ))}
                             {dayEvents.length > 3 && (
                               <span className="text-[10px] text-gray-400 pl-1">
@@ -1011,7 +1144,10 @@ export default function KaldikPage() {
                           <div className="sm:hidden">
                             {dayEvents.length > 0 && !isExpanded && (
                               <button
-                                onClick={() => setExpandedDay(expandKey)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setExpandedDay(expandKey);
+                                }}
                                 className="w-full text-center mt-0.5 px-1 py-0.5 rounded text-[10px] font-medium bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors"
                               >
                                 {dayEvents.length} kegiatan
@@ -1020,24 +1156,23 @@ export default function KaldikPage() {
                             {isExpanded && (
                               <div className="mt-0.5 space-y-0.5">
                                 {dayEvents.map((evt: KaldikWithUnit) => (
-                                  <button
+                                  <div
                                     key={evt.id}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      openEditForm(evt);
-                                    }}
                                     className={cn(
-                                      "w-full text-left px-1 py-0.5 rounded text-[10px] font-medium truncate border transition-colors hover:opacity-80 cursor-pointer",
-                                      getKategoriPillColor(evt.kategori)
+                                      "w-full text-left px-1 py-0.5 rounded text-[10px] font-medium truncate border",
+                                      getUnitColor(evt.unit?.name)
                                     )}
                                   >
                                     {evt.nama_kegiatan.length > 15
                                       ? evt.nama_kegiatan.slice(0, 15) + "…"
                                       : evt.nama_kegiatan}
-                                  </button>
+                                  </div>
                                 ))}
                                 <button
-                                  onClick={() => setExpandedDay(null)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setExpandedDay(null);
+                                  }}
                                   className="w-full text-center text-[10px] text-gray-400 hover:text-gray-600"
                                 >
                                   Tutup
@@ -1054,23 +1189,20 @@ export default function KaldikPage() {
 
               {/* Legend */}
               <div className="flex flex-wrap items-center gap-3 px-4 py-2.5 border-t border-gray-100 bg-gray-50/50">
-                <span className="text-[10px] text-gray-400 font-medium">Kategori:</span>
-                <span className="inline-flex items-center gap-1">
-                  <span className="w-2.5 h-2.5 rounded-full bg-purple-400" />
-                  <span className="text-[10px] text-gray-500">Ibadah</span>
-                </span>
-                <span className="inline-flex items-center gap-1">
-                  <span className="w-2.5 h-2.5 rounded-full bg-red-400" />
-                  <span className="text-[10px] text-gray-500">Ujian</span>
-                </span>
-                <span className="inline-flex items-center gap-1">
-                  <span className="w-2.5 h-2.5 rounded-full bg-green-400" />
-                  <span className="text-[10px] text-gray-500">Libur</span>
-                </span>
-                <span className="inline-flex items-center gap-1">
-                  <span className="w-2.5 h-2.5 rounded-full bg-indigo-400" />
-                  <span className="text-[10px] text-gray-500">Lainnya</span>
-                </span>
+                <span className="text-[10px] text-gray-400 font-medium">Unit:</span>
+                {[
+                  { name: 'SD', dot: 'bg-blue-500' },
+                  { name: 'SMP', dot: 'bg-purple-500' },
+                  { name: 'TK', dot: 'bg-rose-500' },
+                  { name: 'TBI', dot: 'bg-teal-500' },
+                  { name: 'Manajemen', dot: 'bg-emerald-500' },
+                  { name: 'Universal', dot: 'bg-gray-500' },
+                ].map((u) => (
+                  <span key={u.name} className="inline-flex items-center gap-1">
+                    <span className={cn("w-2.5 h-2.5 rounded-full", u.dot)} />
+                    <span className="text-[10px] text-gray-500">{u.name}</span>
+                  </span>
+                ))}
               </div>
             </>
           )}
@@ -1273,6 +1405,131 @@ export default function KaldikPage() {
         confirmText={confirmState.loading ? "Memproses..." : "Ya, Lanjutkan"}
         cancelText="Batal"
       />
+
+      {/* Day Detail Modal */}
+      {selectedDay && (
+        <>
+          {/* Desktop: centered modal */}
+          <div className="hidden sm:flex fixed inset-0 z-50 items-center justify-center">
+            <div
+              className="absolute inset-0 bg-black/40"
+              onClick={() => setSelectedDay(null)}
+            />
+            <div className="relative bg-white rounded-2xl shadow-2xl border border-gray-200 w-full max-w-lg mx-4 max-h-[80vh] overflow-y-auto">
+              <div className="sticky top-0 bg-white border-b border-gray-100 px-5 py-3.5 flex items-center justify-between rounded-t-2xl">
+                <h3 className="text-base font-semibold text-gray-900">
+                  Kegiatan {selectedDay.day} {CAL_MONTH_NAMES[calMonth]} {calYear}
+                </h3>
+                <button
+                  onClick={() => setSelectedDay(null)}
+                  className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="p-5 space-y-3">
+                {selectedDay.events.map((evt: KaldikWithUnit) => (
+                  <div
+                    key={evt.id}
+                    className="border border-gray-100 rounded-xl p-3.5 hover:bg-gray-50/50 transition-colors"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-gray-900 truncate">
+                          {evt.nama_kegiatan}
+                        </p>
+                        <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                          <span
+                            className={cn(
+                              "inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border",
+                              getUnitColor(evt.unit?.name)
+                            )}
+                          >
+                            {evt.unit?.name || '-'}
+                          </span>
+                          <span className="text-[11px] text-gray-400">
+                            {evt.kategori}
+                          </span>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1.5">
+                          {evt.tanggal_mulai
+                            ? `${formatDateDisplay(evt.tanggal_mulai)}${evt.tanggal_selesai && evt.tanggal_selesai !== evt.tanggal_mulai ? ` — ${formatDateDisplay(evt.tanggal_selesai)}` : ''}`
+                            : evt.tanggal_mentah || '-'}
+                        </p>
+                        {evt.catatan_doa && (
+                          <p className="text-xs text-indigo-600 mt-1.5 italic">
+                            🙏 {evt.catatan_doa}
+                          </p>
+                        )}
+                      </div>
+                      <StatusBadge status={evt.status} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Mobile: bottom sheet */}
+          <div className="sm:hidden fixed inset-0 z-50">
+            <div
+              className="absolute inset-0 bg-black/40"
+              onClick={() => setSelectedDay(null)}
+            />
+            <div className="absolute bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-2xl max-h-[80vh] overflow-y-auto">
+              <div className="sticky top-0 bg-white border-b border-gray-100 px-4 py-3 flex items-center justify-between rounded-t-2xl">
+                <h3 className="text-sm font-semibold text-gray-900">
+                  Kegiatan {selectedDay.day} {CAL_MONTH_NAMES[calMonth]} {calYear}
+                </h3>
+                <button
+                  onClick={() => setSelectedDay(null)}
+                  className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="p-4 space-y-3">
+                {selectedDay.events.map((evt: KaldikWithUnit) => (
+                  <div
+                    key={evt.id}
+                    className="border border-gray-100 rounded-xl p-3 hover:bg-gray-50/50 transition-colors"
+                  >
+                    <p className="text-sm font-semibold text-gray-900 truncate">
+                      {evt.nama_kegiatan}
+                    </p>
+                    <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                      <span
+                        className={cn(
+                          "inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border",
+                          getUnitColor(evt.unit?.name)
+                        )}
+                      >
+                        {evt.unit?.name || '-'}
+                      </span>
+                      <span className="text-[11px] text-gray-400">
+                        {evt.kategori}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1.5">
+                      {evt.tanggal_mulai
+                        ? `${formatDateDisplay(evt.tanggal_mulai)}${evt.tanggal_selesai && evt.tanggal_selesai !== evt.tanggal_mulai ? ` — ${formatDateDisplay(evt.tanggal_selesai)}` : ''}`
+                        : evt.tanggal_mentah || '-'}
+                    </p>
+                    {evt.catatan_doa && (
+                      <p className="text-xs text-indigo-600 mt-1.5 italic">
+                        🙏 {evt.catatan_doa}
+                      </p>
+                    )}
+                    <div className="mt-1.5">
+                      <StatusBadge status={evt.status} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils/cn";
 import {
@@ -51,8 +52,15 @@ export function Sidebar() {
     >
       {/* Logo */}
       <div className="flex items-center gap-3 px-4 h-16 border-b border-slate-100">
-        <div className="flex-shrink-0 w-9 h-9 rounded-lg bg-indigo-600 flex items-center justify-center">
-          <CalendarDays className="w-5 h-5 text-white" />
+        <div className="flex-shrink-0 w-9 h-9 rounded-lg overflow-hidden">
+          <Image
+            src="/logo-tbi.png"
+            alt="Logo TBI"
+            width={36}
+            height={36}
+            className="w-full h-full object-contain"
+            priority
+          />
         </div>
         {!collapsed && (
           <div className="flex flex-col min-w-0">
