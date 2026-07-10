@@ -104,9 +104,15 @@ export default function DashboardPage() {
   const [agendaTerdekat, setAgendaTerdekat] = useState<AgendaItem[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const now = new Date();
-  const todayStr = now.toISOString().split('T')[0];
-  const in7Days = new Date(now.getTime() + 7 * 86400000).toISOString().split('T')[0];
+  const { todayStr, in7Days, bulan, tahun } = useMemo(() => {
+    const n = new Date();
+    return {
+      todayStr: n.toISOString().split('T')[0],
+      in7Days: new Date(n.getTime() + 7 * 86400000).toISOString().split('T')[0],
+      bulan: n.getMonth() + 1,
+      tahun: n.getFullYear(),
+    };
+  }, []);
 
   const dailyVerse = useMemo(() => getDailyVerse(), []);
   const greeting = useMemo(() => getGreeting(), []);
@@ -142,24 +148,25 @@ export default function DashboardPage() {
         const portalRes = await fetch('/api/portal', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'getJadwal', unit: 'ALL', bulan: now.getMonth() + 1, tahun: now.getFullYear() }),
+          body: JSON.stringify({ action: 'getJadwal', unit: 'ALL', bulan, tahun }),
         });
         const portalData = await portalRes.json();
         if (portalData.data) {
           // Filter only future/upcoming approved bookings
+          const now = new Date();
+          const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
           const futureData = portalData.data.filter((p: PortalItem) => {
             if (p.status !== 'Approved') return false;
             try {
               const dateStr = p.tanggalDisplay || p.tanggal;
               if (!dateStr) return true;
-              // Try to parse various date formats
               const parts = dateStr.split(/[\/\-]/);
               if (parts.length >= 3) {
                 const day = parseInt(parts[0]);
                 const month = parseInt(parts[1]) - 1;
                 const year = parseInt(parts[2].length === 2 ? '20' + parts[2] : parts[2]);
                 const eventDate = new Date(year, month, day);
-                return eventDate >= new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                return eventDate >= today;
               }
               return true;
             } catch { return true; }
@@ -174,7 +181,7 @@ export default function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, [todayStr, in7Days, now]);
+  }, [todayStr, in7Days, bulan, tahun]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 

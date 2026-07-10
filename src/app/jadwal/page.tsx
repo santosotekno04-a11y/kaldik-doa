@@ -742,14 +742,6 @@ export default function JadwalPage() {
                       <DetailField label="BULAN" value={(detailRow as HolyMorningRow).bulan} />
                       <DetailField label="TANGGAL" value={(detailRow as HolyMorningRow).tanggal} />
                     </div>
-                    <div className="px-4 pb-1">
-                      <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-0.5">TEMA BULANAN</p>
-                      <p className="text-sm font-medium text-gray-800">{(detailRow as HolyMorningRow).tema_bulanan || '—'}</p>
-                    </div>
-                    <div className="px-4 pb-1">
-                      <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-0.5">NAS ALKITAB</p>
-                      <p className="text-sm font-medium text-gray-800">{(detailRow as HolyMorningRow).nas_alkitab || '—'}</p>
-                    </div>
                     <div className="grid grid-cols-2 gap-x-4 gap-y-1 px-4 pb-1">
                       <DetailField label="CHRISTIAN WORLDVIEW" value={(detailRow as HolyMorningRow).christian_worldview} />
                       <DetailField label="PROFIL" value={(detailRow as HolyMorningRow).profil} />
