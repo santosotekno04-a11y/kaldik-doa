@@ -24,11 +24,12 @@ interface DataTableProps<T = any> {
   idField?: string;
   pageSize?: number;
   compact?: boolean;
+  rowClassName?: (row: T) => string | undefined;
 }
 
 export function DataTable<T extends Record<string, unknown>>({
   columns, data, loading, emptyMessage = 'Tidak ada data',
-  onRowClick, selectedIds, onSelectionChange, idField = 'id', pageSize = 20, compact = false
+  onRowClick, selectedIds, onSelectionChange, idField = 'id', pageSize = 20, compact = false, rowClassName
 }: DataTableProps<T>) {
   const [page, setPage] = useState(0);
   const totalPages = Math.ceil(data.length / pageSize);
@@ -126,7 +127,8 @@ export function DataTable<T extends Record<string, unknown>>({
                     className={cn(
                       'transition-colors',
                       onRowClick && 'cursor-pointer hover:bg-indigo-50/50',
-                      isSelected && 'bg-indigo-50/30'
+                      isSelected && 'bg-indigo-50/30',
+                      rowClassName?.(row)
                     )}
                     onClick={() => onRowClick?.(row)}
                   >

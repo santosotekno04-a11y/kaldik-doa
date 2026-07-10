@@ -16,6 +16,7 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPin, setShowPin] = useState(false);
+  const [showForgotPin, setShowForgotPin] = useState(false);
   const [appName, setAppName] = useState("Kaldik & Doa");
 
   // check if already logged in
@@ -148,7 +149,7 @@ export default function LoginPage() {
             )}
 
             {/* PIN dots indicator */}
-            <div className="flex items-center justify-center gap-3 mb-6">
+            <div className="flex items-center justify-center gap-3 mb-4">
               {[0, 1, 2, 3].map((i) => (
                 <div
                   key={i}
@@ -160,6 +161,24 @@ export default function LoginPage() {
                   )}
                 />
               ))}
+            </div>
+
+            {/* Forgot PIN */}
+            <div className="text-center mb-4">
+              <button
+                type="button"
+                onClick={() => setShowForgotPin(!showForgotPin)}
+                className="text-sm text-indigo-600 hover:text-indigo-800 hover:underline transition-colors"
+              >
+                Lupa PIN?
+              </button>
+              {showForgotPin && (
+                <div className="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                  <p className="text-xs text-amber-700">
+                    Hubungi administrator untuk reset PIN, atau akses langsung melalui Supabase Dashboard
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Submit button */}

@@ -53,9 +53,9 @@ export default function SettingPage() {
   const [syncLogs, setSyncLogs] = useState<SyncLog[]>([]);
 
   // security
-  const [currentPin, setCurrentPin] = useState("");
   const [newPin, setNewPin] = useState("");
   const [confirmPin, setConfirmPin] = useState("");
+  const [confirmPinChecked, setConfirmPinChecked] = useState(false);
   const [savingPin, setSavingPin] = useState(false);
 
   // database counts
@@ -234,7 +234,7 @@ export default function SettingPage() {
 
   // save PIN
   const handleSavePin = async () => {
-    if (!currentPin || !newPin || !confirmPin) {
+    if (!newPin || !confirmPin) {
       addToast("warning", "Semua field PIN wajib diisi");
       return;
     }
@@ -246,8 +246,8 @@ export default function SettingPage() {
       addToast("error", "Konfirmasi PIN tidak cocok");
       return;
     }
-    if (currentPin !== settings.APP_PIN) {
-      addToast("error", "PIN lama salah");
+    if (!confirmPinChecked) {
+      addToast("warning", "Centang konfirmasi terlebih dahulu");
       return;
     }
 
@@ -261,9 +261,9 @@ export default function SettingPage() {
       if (error) throw error;
 
       setSettings((prev) => ({ ...prev, APP_PIN: newPin }));
-      setCurrentPin("");
       setNewPin("");
       setConfirmPin("");
+      setConfirmPinChecked(false);
       addToast("success", "PIN berhasil diubah");
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Gagal mengubah PIN";
@@ -601,16 +601,8 @@ export default function SettingPage() {
           <h2 className="text-sm font-semibold text-slate-900">Keamanan</h2>
         </div>
         <div className="p-5">
-          <h3 className="text-sm font-medium text-slate-700 mb-4">Ubah PIN</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <Input
-              label="PIN Saat Ini"
-              type="password"
-              maxLength={4}
-              value={currentPin}
-              onChange={(e) => setCurrentPin(e.target.value.replace(/\D/g, ""))}
-              placeholder="****"
-            />
+          <h3 className="text-sm font-medium text-slate-700 mb-4">Reset PIN</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input
               label="PIN Baru (4 digit)"
               type="password"
@@ -628,12 +620,25 @@ export default function SettingPage() {
               placeholder="****"
             />
           </div>
+          <p className="text-xs text-amber-600 mt-3 flex items-center gap-1.5">
+            <AlertCircle size={14} />
+            Mengubah PIN akan mempengaruhi semua pengguna aplikasi
+          </p>
+          <label className="flex items-center gap-2 mt-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={confirmPinChecked}
+              onChange={(e) => setConfirmPinChecked(e.target.checked)}
+              className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+            />
+            <span className="text-sm text-slate-600">Saya yakin ingin mengubah PIN</span>
+          </label>
           <button
             onClick={handleSavePin}
-            disabled={savingPin || !currentPin || !newPin || !confirmPin}
+            disabled={savingPin || !newPin || !confirmPin || !confirmPinChecked || newPin !== confirmPin}
             className={cn(
               "flex items-center gap-2 mt-4 px-5 py-2.5 text-sm font-medium text-white rounded-lg transition-colors",
-              savingPin || !currentPin || !newPin || !confirmPin
+              savingPin || !newPin || !confirmPin || !confirmPinChecked || newPin !== confirmPin
                 ? "bg-slate-300 cursor-not-allowed"
                 : "bg-red-600 hover:bg-red-700"
             )}
@@ -646,7 +651,7 @@ export default function SettingPage() {
             ) : (
               <>
                 <KeyRound size={16} />
-                Ubah PIN
+                Simpan PIN Baru
               </>
             )}
           </button>

@@ -104,7 +104,7 @@ export default function DashboardPage() {
   const d = data!;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 overflow-x-hidden">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
@@ -115,51 +115,71 @@ export default function DashboardPage() {
       </div>
 
       {/* Stat Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 lg:gap-4">
-        <StatCard label="Agenda Bulan Ini" value={d.kaldik_bulan_ini} icon={CalendarDays} color="indigo" />
-        <StatCard label="Perlu Cek" value={d.perlu_cek} icon={AlertCircle} color="amber" />
-        <StatCard label="Tanpa Tanggal" value={d.tanpa_tanggal} icon={CalendarOff} color="red" />
-        <StatCard label="Karyawan Aktif" value={d.karyawan_aktif} icon={Users} color="emerald" />
-        <StatCard label="Hari Khusus" value={d.hari_khusus_bulan_ini} icon={Star} color="purple" />
-        <StatCard label="Pokok Doa" value={d.pokok_doa_bulan_ini} icon={BookHeart} color="blue" />
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold text-slate-700">Ringkasan</h2>
+          <Link href="/kaldik" className="text-xs text-indigo-600 hover:text-indigo-700 font-medium flex items-center gap-1">
+            Lihat Semua <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 lg:gap-4">
+          <Link href="/kaldik" className="group">
+            <StatCard label="Agenda Bulan Ini" value={d.kaldik_bulan_ini} icon={CalendarDays} color="indigo" className="group-hover:shadow-lg group-hover:scale-[1.02] transition-all cursor-pointer" />
+          </Link>
+          <Link href="/perlu-cek" className="group">
+            <StatCard label="Perlu Cek" value={d.perlu_cek} icon={AlertCircle} color="amber" className="group-hover:shadow-lg group-hover:scale-[1.02] transition-all cursor-pointer" />
+          </Link>
+          <Link href="/tanpa-tanggal" className="group">
+            <StatCard label="Tanpa Tanggal" value={d.tanpa_tanggal} icon={CalendarOff} color="red" className="group-hover:shadow-lg group-hover:scale-[1.02] transition-all cursor-pointer" />
+          </Link>
+          <Link href="/karyawan" className="group">
+            <StatCard label="Karyawan Aktif" value={d.karyawan_aktif} icon={Users} color="emerald" className="group-hover:shadow-lg group-hover:scale-[1.02] transition-all cursor-pointer" />
+          </Link>
+          <Link href="/hari-khusus" className="group">
+            <StatCard label="Hari Khusus" value={d.hari_khusus_bulan_ini} icon={Star} color="purple" className="group-hover:shadow-lg group-hover:scale-[1.02] transition-all cursor-pointer" />
+          </Link>
+          <Link href="/hasil-pokok-doa" className="group">
+            <StatCard label="Pokok Doa" value={d.pokok_doa_bulan_ini} icon={BookHeart} color="blue" className="group-hover:shadow-lg group-hover:scale-[1.02] transition-all cursor-pointer" />
+          </Link>
+        </div>
       </div>
 
       {/* Quick Actions */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <Link href="/kaldik" className="flex items-center gap-3 p-4 bg-white rounded-xl border border-slate-200 hover:shadow-md hover:border-indigo-200 transition-all group">
-          <div className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center group-hover:bg-indigo-100 transition-colors">
+        <Link href="/kaldik" className="flex items-center gap-3 p-4 min-h-[56px] bg-white rounded-xl border border-slate-200 hover:shadow-lg hover:border-indigo-200 hover:scale-[1.02] active:scale-[0.98] transition-all group">
+          <div className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center group-hover:bg-indigo-100 group-hover:scale-110 transition-all">
             <Plus className="w-5 h-5 text-indigo-600" />
           </div>
-          <div>
-            <p className="text-sm font-semibold text-slate-900">Tambah Agenda</p>
-            <p className="text-xs text-slate-500">Kaldik baru</p>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-slate-900 truncate">Tambah Agenda</p>
+            <p className="text-xs text-slate-500 truncate">Kaldik baru</p>
           </div>
         </Link>
-        <Link href="/import-data" className="flex items-center gap-3 p-4 bg-white rounded-xl border border-slate-200 hover:shadow-md hover:border-emerald-200 transition-all group">
-          <div className="w-10 h-10 rounded-lg bg-emerald-50 flex items-center justify-center group-hover:bg-emerald-100 transition-colors">
+        <Link href="/import-data" className="flex items-center gap-3 p-4 min-h-[56px] bg-white rounded-xl border border-slate-200 hover:shadow-lg hover:border-emerald-200 hover:scale-[1.02] active:scale-[0.98] transition-all group">
+          <div className="w-10 h-10 rounded-lg bg-emerald-50 flex items-center justify-center group-hover:bg-emerald-100 group-hover:scale-110 transition-all">
             <FileUp className="w-5 h-5 text-emerald-600" />
           </div>
-          <div>
-            <p className="text-sm font-semibold text-slate-900">Import Data</p>
-            <p className="text-xs text-slate-500">CSV / Spreadsheet</p>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-slate-900 truncate">Import Data</p>
+            <p className="text-xs text-slate-500 truncate">CSV / Spreadsheet</p>
           </div>
         </Link>
-        <Link href="/generate-doa" className="flex items-center gap-3 p-4 bg-white rounded-xl border border-slate-200 hover:shadow-md hover:border-purple-200 transition-all group">
-          <div className="w-10 h-10 rounded-lg bg-purple-50 flex items-center justify-center group-hover:bg-purple-100 transition-colors">
+        <Link href="/generate-doa" className="flex items-center gap-3 p-4 min-h-[56px] bg-white rounded-xl border border-slate-200 hover:shadow-lg hover:border-purple-200 hover:scale-[1.02] active:scale-[0.98] transition-all group">
+          <div className="w-10 h-10 rounded-lg bg-purple-50 flex items-center justify-center group-hover:bg-purple-100 group-hover:scale-110 transition-all">
             <BookHeart className="w-5 h-5 text-purple-600" />
           </div>
-          <div>
-            <p className="text-sm font-semibold text-slate-900">Generate Doa</p>
-            <p className="text-xs text-slate-500">Pokok doa bulanan</p>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-slate-900 truncate">Generate Doa</p>
+            <p className="text-xs text-slate-500 truncate">Pokok doa bulanan</p>
           </div>
         </Link>
-        <button onClick={handleSync} disabled={syncing} className="flex items-center gap-3 p-4 bg-white rounded-xl border border-slate-200 hover:shadow-md hover:border-blue-200 transition-all group disabled:opacity-50">
-          <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center group-hover:bg-blue-100 transition-colors">
+        <button onClick={handleSync} disabled={syncing} className="flex items-center gap-3 p-4 min-h-[56px] bg-white rounded-xl border border-slate-200 hover:shadow-lg hover:border-blue-200 hover:scale-[1.02] active:scale-[0.98] transition-all group disabled:opacity-50 disabled:hover:scale-100">
+          <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center group-hover:bg-blue-100 group-hover:scale-110 transition-all">
             <RefreshCw className={`w-5 h-5 text-blue-600 ${syncing ? 'animate-spin' : ''}`} />
           </div>
-          <div>
-            <p className="text-sm font-semibold text-slate-900">{syncing ? 'Syncing...' : 'Sync Sekarang'}</p>
-            <p className="text-xs text-slate-500">Spreadsheet → Supabase</p>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-slate-900 truncate">{syncing ? 'Syncing...' : 'Sync Sekarang'}</p>
+            <p className="text-xs text-slate-500 truncate">Spreadsheet → Supabase</p>
           </div>
         </button>
       </div>
@@ -184,20 +204,20 @@ export default function DashboardPage() {
                 const unit = agenda.unit as Record<string, string> | null;
                 const tanggal = agenda.tanggal_mulai as string;
                 return (
-                  <div key={agenda.id as string} className="flex items-center gap-4 px-5 py-3.5 hover:bg-slate-50 transition-colors">
-                    <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-indigo-50 flex flex-col items-center justify-center">
+                  <Link key={agenda.id as string} href="/kaldik" className="flex items-center gap-4 px-5 py-3.5 hover:bg-indigo-50/60 transition-colors cursor-pointer group/item">
+                    <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-indigo-50 flex flex-col items-center justify-center group-hover/item:bg-indigo-100 transition-colors">
                       <span className="text-xs font-bold text-indigo-600">{tanggal?.split('-')[2]}</span>
                       <span className="text-[10px] text-indigo-400">{getMonthName(parseInt(tanggal?.split('-')[1] || '0')).slice(0, 3)}</span>
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-slate-900 truncate">{agenda.nama_kegiatan as string}</p>
-                      <p className="text-xs text-slate-500">{agenda.kategori as string}</p>
+                      <p className="text-xs text-slate-500 truncate">{agenda.kategori as string}</p>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-shrink-0">
                       {unit && <UnitBadge unitName={unit.name} />}
                       <StatusBadge status={agenda.status as string} />
                     </div>
-                  </div>
+                  </Link>
                 );
               })
             )}
@@ -207,9 +227,14 @@ export default function DashboardPage() {
         {/* Status Sync & Info */}
         <div className="space-y-4">
           <div className="bg-white rounded-xl border border-slate-200 p-5">
-            <div className="flex items-center gap-2 mb-4">
-              <RefreshCw className="w-4 h-4 text-slate-400" />
-              <h2 className="text-sm font-semibold text-slate-900">Status Sync</h2>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <RefreshCw className="w-4 h-4 text-slate-400" />
+                <h2 className="text-sm font-semibold text-slate-900">Status Sync</h2>
+              </div>
+              <Link href="/setting" className="text-xs text-indigo-600 hover:text-indigo-700 font-medium flex items-center gap-1">
+                Lihat Detail <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
             </div>
             <div className="space-y-3">
               <div className="flex items-center justify-between">
@@ -236,14 +261,17 @@ export default function DashboardPage() {
                 </div>
               )}
             </div>
-            <button onClick={handleSync} disabled={syncing} className="mt-4 w-full flex items-center justify-center gap-2 py-2.5 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50">
+            <button onClick={handleSync} disabled={syncing} className="mt-4 w-full flex items-center justify-center gap-2 py-2.5 min-h-[44px] bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 hover:shadow-lg active:scale-[0.98] transition-all disabled:opacity-50 disabled:hover:shadow-none disabled:active:scale-100">
               <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
               {syncing ? 'Syncing...' : 'Sync Sekarang'}
             </button>
           </div>
 
-          <div className="bg-white rounded-xl border border-slate-200 p-5">
-            <h2 className="text-sm font-semibold text-slate-900 mb-3">Tahun Ajaran Aktif</h2>
+          <Link href="/setting" className="block bg-white rounded-xl border border-slate-200 p-5 hover:shadow-md hover:border-indigo-200 transition-all cursor-pointer group">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-semibold text-slate-900">Tahun Ajaran Aktif</h2>
+              <ArrowRight className="w-4 h-4 text-slate-300 group-hover:text-indigo-500 transition-colors" />
+            </div>
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-xs text-slate-500">Tahun Ajaran</span>
@@ -254,7 +282,7 @@ export default function DashboardPage() {
                 <span className="text-sm font-bold text-indigo-600">{d.semester_aktif} ({d.semester_aktif === '1' ? 'Ganjil' : 'Genap'})</span>
               </div>
             </div>
-          </div>
+          </Link>
         </div>
       </div>
     </div>

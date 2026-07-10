@@ -13,6 +13,7 @@ import {
   CalendarDays,
   ChevronLeft as CalChevronLeft,
   ChevronRight as CalChevronRight,
+  Users,
 } from "lucide-react";
 import { DataTable } from "@/components/ui/data-table";
 import { Modal, ConfirmDialog } from "@/components/ui/modal";
@@ -162,6 +163,54 @@ function getDefaultFormData(): FormData {
   };
 }
 
+function detectDuplicates(data: KaldikWithUnit[]): Map<string, KaldikWithUnit[]> {
+  const groups = new Map<string, KaldikWithUnit[]>();
+  data.forEach(k => {
+    if (!k.tanggal_mulai || !k.nama_kegiatan) return;
+    const key = `${k.tanggal_mulai}::${k.nama_kegiatan.toLowerCase().trim()}`;
+    const existing = groups.get(key) || [];
+    existing.push(k);
+    groups.set(key, existing);
+  });
+  const duplicates = new Map<string, KaldikWithUnit[]>();
+  groups.forEach((items, key) => {
+    if (items.length > 1) {
+      duplicates.set(key, items);
+    }
+  });
+  return duplicates;
+}
+
+type CalendarDisplayEvent = {
+  key: string;
+  nama_kegiatan: string;
+  unitNames: string[];
+  isMerged: boolean;
+  events: KaldikWithUnit[];
+};
+
+function groupCalendarEvents(events: KaldikWithUnit[]): CalendarDisplayEvent[] {
+  const groups = new Map<string, KaldikWithUnit[]>();
+  events.forEach(evt => {
+    const key = evt.nama_kegiatan.toLowerCase().trim();
+    const existing = groups.get(key) || [];
+    existing.push(evt);
+    groups.set(key, existing);
+  });
+  const result: CalendarDisplayEvent[] = [];
+  groups.forEach((items, key) => {
+    const uniqueUnits = [...new Set(items.map(i => i.unit?.name || '-'))];
+    result.push({
+      key: uniqueUnits.length > 1 ? `merged-${key}` : items[0].id,
+      nama_kegiatan: items[0].nama_kegiatan,
+      unitNames: uniqueUnits,
+      isMerged: uniqueUnits.length > 1,
+      events: items,
+    });
+  });
+  return result;
+}
+
 // ── Component ──────────────────────────────────────────────────
 export default function KaldikPage() {
   const { addToast } = useToast();
@@ -189,6 +238,10 @@ export default function KaldikPage() {
   const [selectedDay, setSelectedDay] = useState<{ day: number; events: KaldikWithUnit[] } | null>(null);
   const [showMonthPicker, setShowMonthPicker] = useState(false);
   const [calendarUnitFilter, setCalendarUnitFilter] = useState<string | null>(null);
+
+  // ── Duplicate Detection State ─────────────────────────────
+  const [duplicates, setDuplicates] = useState<Map<string, KaldikWithUnit[]>>(new Map());
+  const [showDuplicatesModal, setShowDuplicatesModal] = useState(false);
 
   // ── Selection & Bulk ───────────────────────────────────────
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -308,6 +361,11 @@ export default function KaldikPage() {
   useEffect(() => {
     fetchHolidays();
   }, [fetchHolidays]);
+
+  // ── Duplicate Detection ───────────────────────────────────
+  useEffect(() => {
+    setDuplicates(detectDuplicates(filteredData));
+  }, [filteredData]);
 
   // ── Form Helpers ───────────────────────────────────────────
   const openCreateForm = useCallback(() => {
@@ -619,19 +677,38 @@ export default function KaldikPage() {
       {
         key: "nama_kegiatan",
         header: "Nama Kegiatan",
-        render: (row: KaldikWithUnit) => (
-          <div>
-            <div className="text-sm font-medium text-gray-900">
-              {row.nama_kegiatan}
-            </div>
-            {row.masuk_pokok_doa && (
-              <div className="text-xs text-indigo-500 mt-0.5 flex items-center gap-1">
-                <span className="inline-block w-1.5 h-1.5 rounded-full bg-indigo-400" />
-                Pokok Doa
+        render: (row: KaldikWithUnit) => {
+          const dupKey = row.tanggal_mulai && row.nama_kegiatan
+            ? `${row.tanggal_mulai}::${row.nama_kegiatan.toLowerCase().trim()}`
+            : '';
+          const dupGroup = dupKey ? duplicates.get(dupKey) : undefined;
+          const isDup = !!dupGroup && dupGroup.length > 1;
+          const unitNames = isDup ? dupGroup.map(d => d.unit?.name || '-').join(', ') : '';
+          return (
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-gray-900">
+                  {row.nama_kegiatan}
+                </span>
+                {isDup && (
+                  <span
+                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700 border border-amber-200 shrink-0"
+                    title={`Duplikat di unit: ${unitNames}`}
+                  >
+                    <Users size={10} />
+                    ×{dupGroup.length} unit
+                  </span>
+                )}
               </div>
-            )}
-          </div>
-        ),
+              {row.masuk_pokok_doa && (
+                <div className="text-xs text-indigo-500 mt-0.5 flex items-center gap-1">
+                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-indigo-400" />
+                  Pokok Doa
+                </div>
+              )}
+            </div>
+          );
+        },
       },
       {
         key: "unit",
@@ -728,7 +805,7 @@ export default function KaldikPage() {
         ),
       },
     ],
-    [openEditForm, handleDuplicate, handleCancel, handleDelete]
+    [openEditForm, handleDuplicate, handleCancel, handleDelete, duplicates]
   );
 
   // ── Render ─────────────────────────────────────────────────
@@ -739,13 +816,28 @@ export default function KaldikPage() {
         title="Kalender Pendidikan"
         description="Kelola agenda kegiatan kalender pendidikan"
         action={
-          <button
-            onClick={openCreateForm}
-            className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors shadow-sm"
-          >
-            <Plus size={16} />
-            Tambah Kegiatan
-          </button>
+          <div className="flex items-center gap-2">
+            {duplicates.size > 0 && (
+              <button
+                onClick={() => setShowDuplicatesModal(true)}
+                className="inline-flex items-center gap-2 px-3 py-2.5 text-sm font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-lg hover:bg-amber-100 transition-colors"
+              >
+                <Users size={16} />
+                <span className="hidden sm:inline">Gabungkan Duplikat</span>
+                <span className="sm:hidden">Duplikat</span>
+                <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-200 text-amber-800 text-[10px] font-bold">
+                  {duplicates.size}
+                </span>
+              </button>
+            )}
+            <button
+              onClick={openCreateForm}
+              className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors shadow-sm"
+            >
+              <Plus size={16} />
+              Tambah Kegiatan
+            </button>
+          </div>
         }
       />
 
@@ -882,6 +974,14 @@ export default function KaldikPage() {
           onSelectionChange={setSelectedIds}
           idField="id"
           pageSize={25}
+          rowClassName={(row) => {
+            const k = row as unknown as KaldikWithUnit;
+            const dupKey = k.tanggal_mulai && k.nama_kegiatan
+              ? `${k.tanggal_mulai}::${k.nama_kegiatan.toLowerCase().trim()}`
+              : '';
+            const dupGroup = dupKey ? duplicates.get(dupKey) : undefined;
+            return dupGroup && dupGroup.length > 1 ? 'border-l-4 border-l-amber-400' : undefined;
+          }}
         />
       ) : (
         /* Calendar View */
@@ -913,7 +1013,7 @@ export default function KaldikPage() {
                 <div className="flex items-center gap-3 relative">
                   <button
                     onClick={() => setShowMonthPicker(!showMonthPicker)}
-                    className="text-base font-semibold text-gray-900 hover:text-indigo-600 transition-colors cursor-pointer"
+                    className="text-sm sm:text-base font-semibold text-gray-900 hover:text-indigo-600 transition-colors cursor-pointer"
                   >
                     {CAL_MONTH_NAMES[calMonth]} {calYear} ▾
                   </button>
@@ -974,7 +1074,7 @@ export default function KaldikPage() {
                       setExpandedDay(null);
                       setSelectedDay(null);
                     }}
-                    className="px-2.5 py-1 text-xs font-medium text-indigo-600 bg-indigo-50 rounded-md hover:bg-indigo-100 transition-colors"
+                    className="px-2 py-0.5 sm:px-2.5 sm:py-1 text-[10px] sm:text-xs font-medium text-indigo-600 bg-indigo-50 rounded-md hover:bg-indigo-100 transition-colors"
                   >
                     Hari Ini
                   </button>
@@ -1005,12 +1105,12 @@ export default function KaldikPage() {
               )}
 
               {/* Unit Filter Chips */}
-              <div className="flex flex-wrap items-center gap-2 px-4 py-2.5 border-b border-gray-100 bg-gray-50/30">
-                <span className="text-[10px] text-gray-400 font-medium mr-1">Filter Unit:</span>
+              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-2 sm:py-2.5 border-b border-gray-100 bg-gray-50/30 overflow-x-auto">
+                <span className="text-[10px] text-gray-400 font-medium mr-1 shrink-0">Filter Unit:</span>
                 <button
                   onClick={() => setCalendarUnitFilter(null)}
                   className={cn(
-                    "px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors",
+                    "px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-[11px] font-medium border transition-colors shrink-0",
                     calendarUnitFilter === null
                       ? "bg-indigo-600 text-white border-indigo-600"
                       : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
@@ -1025,7 +1125,7 @@ export default function KaldikPage() {
                       setCalendarUnitFilter(calendarUnitFilter === unitName ? null : unitName)
                     }
                     className={cn(
-                      "px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors",
+                      "px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-[11px] font-medium border transition-colors shrink-0",
                       calendarUnitFilter === unitName
                         ? getUnitColor(unitName)
                         : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
@@ -1037,13 +1137,14 @@ export default function KaldikPage() {
               </div>
 
               {/* Calendar Grid */}
-              <div className="grid grid-cols-7">
+              <div className="overflow-x-auto">
+              <div className="grid grid-cols-7 min-w-[320px]">
                 {/* Day Headers */}
                 {CAL_DAY_HEADERS.map((day, dayIdx) => (
                   <div
                     key={day}
                     className={cn(
-                      "py-2 text-center text-xs font-semibold border-b border-gray-100 uppercase tracking-wide",
+                      "py-1.5 sm:py-2 text-center text-[10px] sm:text-xs font-semibold border-b border-gray-100 uppercase tracking-wide whitespace-nowrap",
                       dayIdx >= 5 ? "text-red-600" : "text-gray-500"
                     )}
                   >
@@ -1085,7 +1186,7 @@ export default function KaldikPage() {
                         }
                       }}
                       className={cn(
-                        "min-h-[90px] sm:min-h-[110px] border-b border-r border-gray-100 p-1 sm:p-1.5 transition-colors",
+                        "min-h-[90px] sm:min-h-[110px] border-b border-r border-gray-100 p-1 sm:p-1.5 transition-colors min-w-0 overflow-hidden",
                         !day && "bg-gray-50/50",
                         day && dayIsHoliday && "bg-red-50",
                         day && !dayIsHoliday && "hover:bg-gray-50/80",
@@ -1100,7 +1201,7 @@ export default function KaldikPage() {
                           <div className="flex items-center justify-between mb-1">
                             <span
                               className={cn(
-                                "inline-flex items-center justify-center w-6 h-6 sm:w-7 sm:h-7 rounded-full text-xs font-semibold",
+                                "inline-flex items-center justify-center w-5 h-5 sm:w-7 sm:h-7 rounded-full text-[10px] sm:text-xs font-semibold",
                                 isToday
                                   ? "bg-indigo-600 text-white ring-2 ring-indigo-200"
                                   : dayIsHoliday
@@ -1117,27 +1218,43 @@ export default function KaldikPage() {
                             )}
                           </div>
 
-                          {/* Desktop: Show pills */}
-                          <div className="hidden sm:flex flex-col gap-0.5">
-                            {dayEvents.slice(0, 3).map((evt: KaldikWithUnit) => (
-                              <div
-                                key={evt.id}
-                                className={cn(
-                                  "w-full text-left px-1.5 py-0.5 rounded text-[10px] font-medium truncate border",
-                                  getUnitColor(evt.unit?.name)
-                                )}
-                                title={`${evt.nama_kegiatan} (${evt.unit?.name || '-'})`}
-                              >
-                                {evt.nama_kegiatan.length > 20
-                                  ? evt.nama_kegiatan.slice(0, 20) + "…"
-                                  : evt.nama_kegiatan}
-                              </div>
-                            ))}
-                            {dayEvents.length > 3 && (
-                              <span className="text-[10px] text-gray-400 pl-1">
-                                +{dayEvents.length - 3} lagi
-                              </span>
-                            )}
+                          {/* Desktop: Show pills (merged for duplicates) */}
+                          <div className="hidden sm:flex flex-col gap-0.5 min-w-0 overflow-hidden">
+                            {(() => {
+                              const grouped = groupCalendarEvents(dayEvents);
+                              return grouped.slice(0, 3).map((disp) => (
+                                <div
+                                  key={disp.key}
+                                  className={cn(
+                                    "w-full text-left px-1.5 py-0.5 rounded text-[10px] font-medium truncate border min-w-0",
+                                    disp.isMerged
+                                      ? "bg-indigo-50 text-indigo-800 border-indigo-200"
+                                      : getUnitColor(disp.unitNames[0])
+                                  )}
+                                  title={disp.isMerged
+                                    ? disp.nama_kegiatan + ' — ' + disp.unitNames.join(' • ') + ' (×' + disp.events.length + ')'
+                                    : disp.nama_kegiatan + ' (' + disp.unitNames[0] + ')'
+                                  }
+                                >
+                                  <span className="truncate">{disp.nama_kegiatan.length > 18
+                                    ? disp.nama_kegiatan.slice(0, 18) + "..."
+                                    : disp.nama_kegiatan}</span>
+                                  {disp.isMerged && (
+                                    <span className="ml-1 text-[9px] font-semibold opacity-70">
+                                      {disp.unitNames.map(u => u?.slice(0, 3)).join('•')}
+                                    </span>
+                                  )}
+                                </div>
+                              ));
+                            })()}
+                            {(() => {
+                              const grouped = groupCalendarEvents(dayEvents);
+                              return grouped.length > 3 ? (
+                                <span className="text-[10px] text-gray-400 pl-1 hidden sm:inline">
+                                  +{grouped.length - 3} lagi
+                                </span>
+                              ) : null;
+                            })()}
                           </div>
 
                           {/* Mobile: Show count, click to expand */}
@@ -1155,19 +1272,29 @@ export default function KaldikPage() {
                             )}
                             {isExpanded && (
                               <div className="mt-0.5 space-y-0.5">
-                                {dayEvents.map((evt: KaldikWithUnit) => (
-                                  <div
-                                    key={evt.id}
-                                    className={cn(
-                                      "w-full text-left px-1 py-0.5 rounded text-[10px] font-medium truncate border",
-                                      getUnitColor(evt.unit?.name)
-                                    )}
-                                  >
-                                    {evt.nama_kegiatan.length > 15
-                                      ? evt.nama_kegiatan.slice(0, 15) + "…"
-                                      : evt.nama_kegiatan}
-                                  </div>
-                                ))}
+                                {(() => {
+                                  const grouped = groupCalendarEvents(dayEvents);
+                                  return grouped.map((disp) => (
+                                    <div
+                                      key={disp.key}
+                                      className={cn(
+                                        "w-full text-left px-1 py-0.5 rounded text-[10px] font-medium truncate border min-w-0",
+                                        disp.isMerged
+                                          ? "bg-indigo-50 text-indigo-800 border-indigo-200"
+                                          : getUnitColor(disp.unitNames[0])
+                                      )}
+                                    >
+                                      <span className="truncate">{disp.nama_kegiatan.length > 13
+                                        ? disp.nama_kegiatan.slice(0, 13) + "..."
+                                        : disp.nama_kegiatan}</span>
+                                      {disp.isMerged && (
+                                        <span className="ml-0.5 text-[9px] font-semibold opacity-70">
+                                          x{disp.events.length}
+                                        </span>
+                                      )}
+                                    </div>
+                                  ));
+                                })()}
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
@@ -1185,6 +1312,7 @@ export default function KaldikPage() {
                     </div>
                   );
                 })}
+              </div>
               </div>
 
               {/* Legend */}
@@ -1405,6 +1533,90 @@ export default function KaldikPage() {
         confirmText={confirmState.loading ? "Memproses..." : "Ya, Lanjutkan"}
         cancelText="Batal"
       />
+
+      {/* Duplicates Modal */}
+      {showDuplicatesModal && (
+        <Modal
+          open={showDuplicatesModal}
+          onClose={() => setShowDuplicatesModal(false)}
+          title="Kegiatan Duplikat Terdeteksi"
+          size="lg"
+        >
+          <div className="space-y-4">
+            {duplicates.size === 0 ? (
+              <p className="text-sm text-gray-500 text-center py-8">
+                Tidak ada kegiatan duplikat terdeteksi.
+              </p>
+            ) : (
+              <>
+                <p className="text-sm text-gray-600">
+                  Ditemukan <span className="font-semibold text-amber-700">{duplicates.size}</span> grup kegiatan
+                  dengan nama yang sama pada tanggal yang sama tetapi dari unit berbeda.
+                </p>
+                <div className="space-y-3 max-h-[60vh] overflow-y-auto">
+                  {Array.from(duplicates.entries()).map(([key, items]) => {
+                    const eventName = items[0].nama_kegiatan;
+                    const eventDate = items[0].tanggal_mulai;
+                    return (
+                      <div
+                        key={key}
+                        className="border border-amber-200 rounded-xl p-4 bg-amber-50/50"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-gray-900 truncate">
+                              {eventName}
+                            </p>
+                            <p className="text-xs text-gray-500 mt-0.5">
+                              {eventDate ? formatDateDisplay(eventDate) : '-'}
+                            </p>
+                          </div>
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700 border border-amber-200 shrink-0">
+                            x{items.length} unit
+                          </span>
+                        </div>
+                        <div className="mt-3 space-y-1.5">
+                          {items.map((item) => (
+                            <div
+                              key={item.id}
+                              className="flex items-center justify-between gap-2 px-3 py-2 bg-white rounded-lg border border-gray-100"
+                            >
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span
+                                  className={cn(
+                                    "inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border shrink-0",
+                                    getUnitColor(item.unit?.name)
+                                  )}
+                                >
+                                  {item.unit?.name || '-'}
+                                </span>
+                                <span className="text-xs text-gray-500 truncate">
+                                  {item.status}
+                                </span>
+                              </div>
+                              <span className="text-[10px] text-gray-400 shrink-0">
+                                ID: {item.kaldik_id || item.id?.slice(0, 8)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="flex justify-end pt-3 border-t border-gray-100">
+                  <button
+                    onClick={() => setShowDuplicatesModal(false)}
+                    className="px-4 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                  >
+                    Tutup
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </Modal>
+      )}
 
       {/* Day Detail Modal */}
       {selectedDay && (
