@@ -670,9 +670,10 @@ export default function PortalPage() {
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-gray-50/50">
               <button
                 onClick={() => {
-                  if (calMonth === 0) { setCalMonth(11); setCalYear(calYear - 1); }
-                  else { setCalMonth(calMonth - 1); }
+                  if (calMonth === 0) { setCalMonth(11); setCalYear(calYear - 1); setBulan(12); setTahun(calYear - 1); }
+                  else { setCalMonth(calMonth - 1); setBulan(calMonth); setTahun(calYear); }
                   setSelectedDay(null);
+                  setPage(0);
                 }}
                 className="p-2 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
               >
@@ -705,8 +706,12 @@ export default function PortalPage() {
                             key={name}
                             onClick={() => {
                               setCalMonth(i);
+                              setCalYear(calYear);
+                              setBulan(i + 1);
+                              setTahun(calYear);
                               setShowMonthPicker(false);
                               setSelectedDay(null);
+                              setPage(0);
                             }}
                             className={cn(
                               "px-2 py-1.5 rounded-lg text-xs font-medium transition-colors",
@@ -728,7 +733,10 @@ export default function PortalPage() {
                   onClick={() => {
                     setCalMonth(now.getMonth());
                     setCalYear(now.getFullYear());
+                    setBulan(now.getMonth() + 1);
+                    setTahun(now.getFullYear());
                     setSelectedDay(null);
+                    setPage(0);
                   }}
                   className="px-2 py-0.5 sm:px-2.5 sm:py-1 text-[10px] sm:text-xs font-medium text-blue-600 bg-blue-50 rounded-md hover:bg-blue-100 transition-colors"
                 >
@@ -737,9 +745,10 @@ export default function PortalPage() {
               </div>
               <button
                 onClick={() => {
-                  if (calMonth === 11) { setCalMonth(0); setCalYear(calYear + 1); }
-                  else { setCalMonth(calMonth + 1); }
+                  if (calMonth === 11) { setCalMonth(0); setCalYear(calYear + 1); setBulan(1); setTahun(calYear + 1); }
+                  else { setCalMonth(calMonth + 1); setBulan(calMonth + 2); setTahun(calYear); }
                   setSelectedDay(null);
+                  setPage(0);
                 }}
                 className="p-2 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
               >
@@ -870,8 +879,8 @@ export default function PortalPage() {
 
         {/* Day Detail Popup (mobile + desktop) */}
         {selectedDay && (
-          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40" onClick={() => setSelectedDay(null)}>
-            <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md max-h-[80vh] overflow-y-auto shadow-xl" onClick={(e) => e.stopPropagation()}>
+          <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/40 pb-20 sm:pb-0" onClick={() => setSelectedDay(null)}>
+            <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md max-h-[70vh] sm:max-h-[80vh] overflow-y-auto shadow-xl" onClick={(e) => e.stopPropagation()}>
               <div className="sticky top-0 bg-white px-4 py-3 border-b border-gray-100 flex items-center justify-between">
                 <h3 className="text-sm font-bold text-gray-900">
                   {calMonth !== undefined && BULAN_LABELS[calMonth + 1]} {calYear} — Tanggal {selectedDay.day}
