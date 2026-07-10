@@ -720,20 +720,23 @@ export default function JadwalPage() {
           <div>
             <div ref={detailRef} className="bg-white">
               <div className="p-6 rounded-t-xl mb-4 text-center" style={{ background: 'linear-gradient(135deg, #4338ca 0%, #6366f1 100%)' }}>
-                <h1 className="text-lg font-bold text-white">
-                  {detailType === 'ibadah' ? 'Jadwal Ibadah dan Pelayan dalam Ibadah Pegawai' : 'Jadwal Pelayan Firman Holy Morning'}
-                </h1>
-                <p className="text-indigo-200 text-sm mt-1">SKL — Tahun Ajar {detailRow.tahun_ajaran}</p>
                 {detailType === 'ibadah' ? (
-                  <p className="text-indigo-200 text-xs mt-0.5">Periode: {detailRow.bulan} / {detailRow.tanggal}</p>
+                  <>
+                    <h1 className="text-lg font-bold text-white">Jadwal Ibadah dan Pelayan dalam Ibadah Pegawai</h1>
+                    <p className="text-indigo-200 text-sm mt-1">Sekolah Kristen Lentera — Tahun Ajar {detailRow.tahun_ajaran}</p>
+                    <p className="text-indigo-200 text-xs mt-0.5">Periode: {detailRow.bulan} / {detailRow.tanggal}</p>
+                  </>
                 ) : (
                   <>
+                    <h1 className="text-lg font-bold text-white">Jadwal Pelayan Firman</h1>
+                    <h2 className="text-base font-semibold text-indigo-100 mt-0.5">Holy Morning</h2>
+                    <p className="text-indigo-200 text-sm mt-1">SKL — Tahun Ajar {detailRow.tahun_ajaran}</p>
                     <p className="text-indigo-100 text-sm mt-1 font-medium">{(detailRow as HolyMorningRow).tema_bulanan || ''}</p>
                     <p className="text-indigo-200 text-xs mt-0.5">{(detailRow as HolyMorningRow).nas_alkitab || ''}</p>
                   </>
                 )}
               </div>
-              <div className="space-y-1 px-4 pb-4">
+              <div className="space-y-1 px-6 pb-4">
                 {detailType === 'ibadah' ? (
                   <>
                     <DetailField label="BULAN" value={(detailRow as IbadahRow).bulan} />
@@ -745,22 +748,22 @@ export default function JadwalPage() {
                   </>
                 ) : (
                   <>
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 px-4 pb-4">
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 px-6 pb-4">
                       <DetailField label="BULAN" value={(detailRow as HolyMorningRow).bulan} />
                       <DetailField label="TANGGAL" value={(detailRow as HolyMorningRow).tanggal} />
                     </div>
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 px-4 pb-1">
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 px-6 pb-1">
                       <DetailField label="CHRISTIAN WORLDVIEW" value={(detailRow as HolyMorningRow).christian_worldview} />
                       <DetailField label="PROFIL" value={(detailRow as HolyMorningRow).profil} />
                     </div>
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 px-4 pb-1">
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 px-6 pb-1">
                       <DetailField label="BESTRA" value={(detailRow as HolyMorningRow).bestra} />
                       <DetailField label="KARAKTER" value={(detailRow as HolyMorningRow).karakter} />
                     </div>
-                    <div className="px-4 pb-1">
+                    <div className="px-6 pb-1">
                       <DetailField label="TUJUAN" value={(detailRow as HolyMorningRow).tujuan} />
                     </div>
-                    <div className="px-4 pb-2">
+                    <div className="px-6 pb-2">
                       <p className="text-[10px] font-bold text-red-600 uppercase tracking-wider mb-0.5">PELAYAN HOLY MORNING</p>
                       <p className="text-sm font-bold text-red-700">{(detailRow as HolyMorningRow).pelayan_holy_morning || '—'}</p>
                     </div>
@@ -779,8 +782,9 @@ export default function JadwalPage() {
                   return null;
                 })()}
               </div>
-              <div className="px-4 pb-4 text-xs text-gray-400 text-right border-t border-gray-100 pt-3">
-                Sekolah Kristen Lentera &middot; Dicetak {new Date().toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+              <div className="px-6 pb-4 text-xs text-gray-400 text-right border-t border-gray-100 pt-3">
+                <p>Sekolah Kristen Lentera</p>
+                <p>Dicetak {new Date().toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
               </div>
             </div>
             <div className="flex justify-end gap-3 pt-4 mt-4 border-t border-gray-100">
