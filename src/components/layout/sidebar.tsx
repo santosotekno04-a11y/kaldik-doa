@@ -20,6 +20,7 @@ import {
   ChevronLeft,
   ChevronRight,
   CalendarClock,
+  Building2,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -27,6 +28,7 @@ const menuItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/kaldik", label: "Kaldik", icon: CalendarDays },
   { href: "/jadwal", label: "Jadwal", icon: CalendarClock },
+  { href: "/portal", label: "Portal Gedung", icon: Building2 },
   { href: "/tema-bulanan", label: "Tema Bulanan", icon: Palette },
   { href: "/perlu-cek", label: "Perlu Cek", icon: AlertCircle },
   { href: "/tanpa-tanggal", label: "Tanpa Tanggal", icon: CalendarOff },
