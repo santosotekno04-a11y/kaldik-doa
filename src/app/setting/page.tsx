@@ -16,12 +16,17 @@ import {
   KeyRound,
   Server,
   Table2,
+  Building2,
+  Plus,
+  Edit2,
+  Trash2,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { useToast } from "@/components/ui/toast";
 import { Input } from "@/components/ui/form-controls";
 import { formatDate } from "@/lib/utils/date";
 import { cn } from "@/lib/utils/cn";
+import { Modal, ConfirmDialog } from "@/components/ui/modal";
 import type { Setting, SyncLog } from "@/lib/types";
 
 // ---------- types ----------
@@ -57,6 +62,16 @@ export default function SettingPage() {
   const [tableCounts, setTableCounts] = useState<TableCount[]>([]);
   const [loadingCounts, setLoadingCounts] = useState(false);
 
+  // units management
+  interface UnitItem { id: string; code: string; name: string; color: string; is_active: boolean; }
+  const [units, setUnits] = useState<UnitItem[]>([]);
+  const [showUnitModal, setShowUnitModal] = useState(false);
+  const [editingUnit, setEditingUnit] = useState<UnitItem | null>(null);
+  const [unitName, setUnitName] = useState("");
+  const [unitColor, setUnitColor] = useState("blue");
+  const [savingUnit, setSavingUnit] = useState(false);
+  const [deleteUnitConfirm, setDeleteUnitConfirm] = useState<UnitItem | null>(null);
+
   // loading
   const [loading, setLoading] = useState(true);
 
@@ -71,6 +86,7 @@ export default function SettingPage() {
       loadSettings(),
       loadSyncLogs(),
       loadTableCounts(),
+      loadUnits(),
     ]);
     setLoading(false);
   };
@@ -133,6 +149,65 @@ export default function SettingPage() {
     }
     setTableCounts(counts);
     setLoadingCounts(false);
+  };
+
+  const loadUnits = async () => {
+    const { data } = await supabase.from("units").select("*").order("code");
+    if (data) setUnits(data as UnitItem[]);
+  };
+
+  const handleSaveUnit = async () => {
+    if (!unitName.trim()) { addToast("warning", "Nama unit wajib diisi"); return; }
+    setSavingUnit(true);
+    try {
+      if (editingUnit) {
+        const { error } = await supabase.from("units").update({ name: unitName.trim(), color: unitColor }).eq("id", editingUnit.id);
+        if (error) throw error;
+        addToast("success", `Unit "${unitName}" berhasil diupdate`);
+      } else {
+        const lastCode = units.map(u => parseInt(u.code.replace("U", ""))).sort((a, b) => b - a)[0] || 0;
+        const nextCode = `U${String(lastCode + 1).padStart(3, "0")}`;
+        const { error } = await supabase.from("units").insert({ code: nextCode, name: unitName.trim(), color: unitColor, is_active: true });
+        if (error) throw error;
+        addToast("success", `Unit "${unitName}" berhasil ditambahkan`);
+      }
+      setShowUnitModal(false);
+      setEditingUnit(null);
+      setUnitName("");
+      setUnitColor("blue");
+      loadUnits();
+    } catch (err) {
+      addToast("error", err instanceof Error ? err.message : "Gagal menyimpan unit");
+    } finally {
+      setSavingUnit(false);
+    }
+  };
+
+  const handleDeleteUnit = async () => {
+    if (!deleteUnitConfirm) return;
+    try {
+      const { error } = await supabase.from("units").delete().eq("id", deleteUnitConfirm.id);
+      if (error) throw error;
+      addToast("success", `Unit "${deleteUnitConfirm.name}" berhasil dihapus`);
+      setDeleteUnitConfirm(null);
+      loadUnits();
+    } catch (err) {
+      addToast("error", err instanceof Error ? err.message : "Gagal menghapus unit");
+    }
+  };
+
+  const openEditUnit = (unit: UnitItem) => {
+    setEditingUnit(unit);
+    setUnitName(unit.name);
+    setUnitColor(unit.color);
+    setShowUnitModal(true);
+  };
+
+  const openAddUnit = () => {
+    setEditingUnit(null);
+    setUnitName("");
+    setUnitColor("blue");
+    setShowUnitModal(true);
   };
 
   // save individual setting
@@ -577,6 +652,136 @@ export default function SettingPage() {
           </button>
         </div>
       </div>
+
+      {/* Section: Manajemen Unit */}
+      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+          <div className="flex items-center gap-2">
+            <Building2 size={16} className="text-slate-400" />
+            <h2 className="text-sm font-semibold text-slate-900">Manajemen Unit</h2>
+          </div>
+          <button
+            onClick={openAddUnit}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors"
+          >
+            <Plus size={12} />
+            Tambah Unit
+          </button>
+        </div>
+        <div className="p-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {units.map((unit) => (
+              <div
+                key={unit.id}
+                className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100"
+              >
+                <div className="flex items-center gap-3">
+                  <div
+                    className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold text-white"
+                    style={{ backgroundColor: unit.color === "gray" ? "#6b7280" : unit.color === "rose" ? "#e11d48" : unit.color === "blue" ? "#2563eb" : unit.color === "purple" ? "#9333ea" : unit.color === "green" ? "#059669" : unit.color === "teal" ? "#0d9488" : "#6b7280" }}
+                  >
+                    {unit.code}
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">{unit.name}</p>
+                    <p className="text-[11px] text-slate-500">{unit.code}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => openEditUnit(unit)}
+                    className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                    title="Edit"
+                  >
+                    <Edit2 size={14} />
+                  </button>
+                  <button
+                    onClick={() => setDeleteUnitConfirm(unit)}
+                    className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                    title="Hapus"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Unit Modal */}
+      <Modal
+        open={showUnitModal}
+        onClose={() => { setShowUnitModal(false); setEditingUnit(null); }}
+        title={editingUnit ? "Edit Unit" : "Tambah Unit Baru"}
+        size="sm"
+      >
+        <div className="space-y-4">
+          <Input
+            label="Nama Unit"
+            value={unitName}
+            onChange={(e) => setUnitName(e.target.value)}
+            placeholder="Contoh: TBI, TK A, SD Internasional"
+          />
+          <div className="space-y-1">
+            <label className="block text-sm font-medium text-gray-700">Warna</label>
+            <div className="flex flex-wrap gap-2">
+              {[
+                { name: "gray", label: "Abu", bg: "#6b7280" },
+                { name: "rose", label: "Merah Muda", bg: "#e11d48" },
+                { name: "blue", label: "Biru", bg: "#2563eb" },
+                { name: "purple", label: "Ungu", bg: "#9333ea" },
+                { name: "green", label: "Hijau", bg: "#059669" },
+                { name: "teal", label: "Teal", bg: "#0d9488" },
+                { name: "amber", label: "Kuning", bg: "#d97706" },
+                { name: "orange", label: "Oranye", bg: "#ea580c" },
+                { name: "cyan", label: "Cyan", bg: "#0891b2" },
+                { name: "pink", label: "Pink", bg: "#db2777" },
+              ].map((c) => (
+                <button
+                  key={c.name}
+                  onClick={() => setUnitColor(c.name)}
+                  className={cn(
+                    "w-8 h-8 rounded-full border-2 transition-all",
+                    unitColor === c.name ? "border-slate-900 scale-110" : "border-transparent"
+                  )}
+                  style={{ backgroundColor: c.bg }}
+                  title={c.label}
+                />
+              ))}
+            </div>
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <button
+              onClick={() => { setShowUnitModal(false); setEditingUnit(null); }}
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+            >
+              Batal
+            </button>
+            <button
+              onClick={handleSaveUnit}
+              disabled={savingUnit || !unitName.trim()}
+              className={cn(
+                "flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white rounded-lg",
+                savingUnit || !unitName.trim() ? "bg-slate-300 cursor-not-allowed" : "bg-indigo-600 hover:bg-indigo-700"
+              )}
+            >
+              {savingUnit ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+              {editingUnit ? "Update" : "Simpan"}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Delete Unit Confirm */}
+      <ConfirmDialog
+        open={!!deleteUnitConfirm}
+        onClose={() => setDeleteUnitConfirm(null)}
+        onConfirm={handleDeleteUnit}
+        title="Hapus Unit"
+        message={`Yakin ingin menghapus unit "${deleteUnitConfirm?.name}"? Data yang terkait unit ini tidak akan terhapus.`}
+        confirmText="Hapus"
+      />
 
       {/* Section: Database */}
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
