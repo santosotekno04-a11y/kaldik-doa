@@ -723,8 +723,15 @@ export default function JadwalPage() {
                 <h1 className="text-lg font-bold text-white">
                   {detailType === 'ibadah' ? 'Jadwal Ibadah dan Pelayan dalam Ibadah Pegawai' : 'Jadwal Pelayan Firman Holy Morning'}
                 </h1>
-                <p className="text-indigo-200 text-sm mt-1">Sekolah Kristen Lentera — Tahun Ajar {detailRow.tahun_ajaran}</p>
-                <p className="text-indigo-200 text-xs mt-0.5">Periode: {detailRow.bulan} / {detailRow.tanggal}</p>
+                <p className="text-indigo-200 text-sm mt-1">SKL — Tahun Ajar {detailRow.tahun_ajaran}</p>
+                {detailType === 'ibadah' ? (
+                  <p className="text-indigo-200 text-xs mt-0.5">Periode: {detailRow.bulan} / {detailRow.tanggal}</p>
+                ) : (
+                  <>
+                    <p className="text-indigo-100 text-sm mt-1 font-medium">{(detailRow as HolyMorningRow).tema_bulanan || ''}</p>
+                    <p className="text-indigo-200 text-xs mt-0.5">{(detailRow as HolyMorningRow).nas_alkitab || ''}</p>
+                  </>
+                )}
               </div>
               <div className="space-y-1 px-4 pb-4">
                 {detailType === 'ibadah' ? (
