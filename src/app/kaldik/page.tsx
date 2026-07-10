@@ -223,6 +223,169 @@ function groupCalendarEvents(events: KaldikWithUnit[]): CalendarDisplayEvent[] {
   return result;
 }
 
+// ── Mobile Card List Component ──────────────────────────────
+function MobileKaldikList({
+  data,
+  duplicates,
+  onEdit,
+  onDuplicate,
+  onCancel,
+  onDelete,
+}: {
+  data: KaldikWithUnit[];
+  duplicates: Map<string, KaldikWithUnit[]>;
+  onEdit: (item: KaldikWithUnit) => void;
+  onDuplicate: (item: KaldikWithUnit) => void;
+  onCancel: (item: KaldikWithUnit) => void;
+  onDelete: (item: KaldikWithUnit) => void;
+}) {
+  const [page, setPage] = useState(0);
+  const pageSize = 15;
+  const totalPages = Math.ceil(data.length / pageSize);
+  const pagedData = data.slice(page * pageSize, (page + 1) * pageSize);
+
+  return (
+    <div className="space-y-2">
+      {pagedData.map((item) => {
+        const dupKey = item.tanggal_mulai && item.nama_kegiatan
+          ? `${item.tanggal_mulai}::${item.nama_kegiatan.toLowerCase().trim()}`
+          : '';
+        const dupGroup = dupKey ? duplicates.get(dupKey) : undefined;
+        const isDup = !!dupGroup && dupGroup.length > 1;
+
+        return (
+          <div
+            key={item.id}
+            className={cn(
+              "bg-white rounded-xl border border-gray-200 p-3.5 active:bg-gray-50 transition-colors",
+              isDup && "border-l-4 border-l-amber-400"
+            )}
+          >
+            {/* Row 1: Date + Unit + Status */}
+            <div className="flex items-center justify-between gap-2 mb-1.5">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-[11px] font-medium text-gray-500 shrink-0">
+                  {item.tanggal_mulai
+                    ? formatDateDisplay(item.tanggal_mulai)
+                    : item.tanggal_mentah || "-"}
+                </span>
+                {item.tanggal_selesai && item.tanggal_selesai !== item.tanggal_mulai && (
+                  <span className="text-[10px] text-gray-400 shrink-0">
+                    s/d {formatDateDisplay(item.tanggal_selesai)}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <UnitBadge unitName={item.unit?.name || item.unit_scope || "-"} />
+                <StatusBadge status={item.status} />
+              </div>
+            </div>
+
+            {/* Row 2: Activity Name */}
+            <div className="flex items-center gap-2">
+              <p className="text-sm font-semibold text-gray-900 truncate flex-1">
+                {item.nama_kegiatan}
+              </p>
+              {isDup && (
+                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-amber-100 text-amber-700 border border-amber-200 shrink-0">
+                  <Users size={9} />
+                  ×{dupGroup!.length}
+                </span>
+              )}
+            </div>
+
+            {/* Row 3: Category + Priority + Doa */}
+            <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+              <span className="text-[11px] text-gray-400">{item.kategori}</span>
+              <span className="text-[10px] text-gray-300">•</span>
+              <span
+                className={cn(
+                  "inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-semibold",
+                  item.prioritas_doa <= 3
+                    ? "bg-red-100 text-red-700"
+                    : item.prioritas_doa <= 6
+                      ? "bg-amber-100 text-amber-700"
+                      : "bg-gray-100 text-gray-600"
+                )}
+              >
+                {item.prioritas_doa}
+              </span>
+              {item.masuk_pokok_doa && (
+                <>
+                  <span className="text-[10px] text-gray-300">•</span>
+                  <span className="text-[11px] text-indigo-500 flex items-center gap-0.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-400" />
+                    Doa
+                  </span>
+                </>
+              )}
+            </div>
+
+            {/* Row 4: Actions */}
+            <div className="flex items-center gap-1 mt-2 pt-2 border-t border-gray-100">
+              <button
+                onClick={() => onEdit(item)}
+                className="flex-1 flex items-center justify-center gap-1 py-1.5 text-[11px] font-medium text-indigo-600 bg-indigo-50 rounded-lg hover:bg-indigo-100 transition-colors"
+              >
+                <Edit2 size={12} />
+                Edit
+              </button>
+              <button
+                onClick={() => onDuplicate(item)}
+                className="flex-1 flex items-center justify-center gap-1 py-1.5 text-[11px] font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
+              >
+                <Copy size={12} />
+                Duplikat
+              </button>
+              {item.status !== "Dibatalkan" && (
+                <button
+                  onClick={() => onCancel(item)}
+                  className="flex-1 flex items-center justify-center gap-1 py-1.5 text-[11px] font-medium text-amber-600 bg-amber-50 rounded-lg hover:bg-amber-100 transition-colors"
+                >
+                  <XCircle size={12} />
+                  Batal
+                </button>
+              )}
+              <button
+                onClick={() => onDelete(item)}
+                className="flex items-center justify-center p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+              >
+                <Trash2 size={12} />
+              </button>
+            </div>
+          </div>
+        );
+      })}
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between px-2 py-2.5">
+          <span className="text-xs text-gray-400">
+            {page * pageSize + 1}-{Math.min((page + 1) * pageSize, data.length)} dari {data.length}
+          </span>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setPage(p => Math.max(0, p - 1))}
+              disabled={page === 0}
+              className="p-1.5 rounded-lg hover:bg-gray-100 disabled:opacity-30 transition-colors"
+            >
+              <CalChevronLeft size={16} />
+            </button>
+            <span className="px-2 text-xs text-gray-500">{page + 1}/{totalPages}</span>
+            <button
+              onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+              disabled={page >= totalPages - 1}
+              className="p-1.5 rounded-lg hover:bg-gray-100 disabled:opacity-30 transition-colors"
+            >
+              <CalChevronRight size={16} />
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Component ──────────────────────────────────────────────────
 export default function KaldikPage() {
   const { addToast } = useToast();
@@ -1101,26 +1264,58 @@ export default function KaldikPage() {
         </div>
       )}
 
-      {/* Data Table */}
+      {/* Data Table - Desktop: normal table, Mobile: card list */}
       {viewMode === "table" ? (
-        <DataTable
-          columns={columns}
-          data={filteredData as unknown as Record<string, unknown>[]}
-          loading={loading}
-          emptyMessage="Tidak ada data kaldik ditemukan"
-          selectedIds={selectedIds}
-          onSelectionChange={setSelectedIds}
-          idField="id"
-          pageSize={25}
-          rowClassName={(row) => {
-            const k = row as unknown as KaldikWithUnit;
-            const dupKey = k.tanggal_mulai && k.nama_kegiatan
-              ? `${k.tanggal_mulai}::${k.nama_kegiatan.toLowerCase().trim()}`
-              : '';
-            const dupGroup = dupKey ? duplicates.get(dupKey) : undefined;
-            return dupGroup && dupGroup.length > 1 ? 'border-l-4 border-l-amber-400' : undefined;
-          }}
-        />
+        <>
+          {/* Desktop Table */}
+          <div className="hidden sm:block">
+            <DataTable
+              columns={columns}
+              data={filteredData as unknown as Record<string, unknown>[]}
+              loading={loading}
+              emptyMessage="Tidak ada data kaldik ditemukan"
+              selectedIds={selectedIds}
+              onSelectionChange={setSelectedIds}
+              idField="id"
+              pageSize={25}
+              rowClassName={(row) => {
+                const k = row as unknown as KaldikWithUnit;
+                const dupKey = k.tanggal_mulai && k.nama_kegiatan
+                  ? `${k.tanggal_mulai}::${k.nama_kegiatan.toLowerCase().trim()}`
+                  : '';
+                const dupGroup = dupKey ? duplicates.get(dupKey) : undefined;
+                return dupGroup && dupGroup.length > 1 ? 'border-l-4 border-l-amber-400' : undefined;
+              }}
+            />
+          </div>
+
+          {/* Mobile Card List */}
+          <div className="sm:hidden">
+            {loading ? (
+              <div className="space-y-3">
+                {[...Array(5)].map((_, i) => (
+                  <div key={i} className="bg-white rounded-xl border border-gray-200 p-4 animate-pulse">
+                    <div className="h-4 bg-gray-200 rounded w-3/4 mb-2" />
+                    <div className="h-3 bg-gray-100 rounded w-1/2" />
+                  </div>
+                ))}
+              </div>
+            ) : filteredData.length === 0 ? (
+              <div className="bg-white rounded-xl border border-gray-200 p-8 text-center">
+                <p className="text-sm text-gray-400">Tidak ada data kaldik ditemukan</p>
+              </div>
+            ) : (
+              <MobileKaldikList
+                data={filteredData}
+                duplicates={duplicates}
+                onEdit={openEditForm}
+                onDuplicate={handleDuplicate}
+                onCancel={handleCancel}
+                onDelete={handleDelete}
+              />
+            )}
+          </div>
+        </>
       ) : (
         /* Calendar View */
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
@@ -1802,7 +1997,7 @@ export default function KaldikPage() {
       {selectedDay && (
         <>
           {/* Tablet: centered modal */}
-          <div className="hidden sm:flex lg:hidden fixed inset-0 z-50 items-center justify-center">
+          <div className="hidden sm:flex lg:hidden fixed inset-0 z-[60] items-center justify-center">
             <div
               className="absolute inset-0 bg-black/40"
               onClick={() => setSelectedDay(null)}
@@ -1863,12 +2058,12 @@ export default function KaldikPage() {
           </div>
 
           {/* Mobile: bottom sheet */}
-          <div className="lg:hidden fixed inset-0 z-50">
+          <div className="lg:hidden fixed inset-0 z-[60]">
             <div
               className="absolute inset-0 bg-black/40"
               onClick={() => setSelectedDay(null)}
             />
-            <div className="absolute bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-2xl max-h-[80vh] overflow-y-auto">
+            <div className="absolute bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-2xl max-h-[80vh] overflow-y-auto pb-20">
               <div className="sticky top-0 bg-white border-b border-gray-100 px-4 py-3 flex items-center justify-between rounded-t-2xl">
                 <h3 className="text-sm font-semibold text-gray-900">
                   Kegiatan {selectedDay.day} {CAL_MONTH_NAMES[calMonth]} {calYear}
