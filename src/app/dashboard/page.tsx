@@ -242,7 +242,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="space-y-5 overflow-x-hidden pb-4">
+    <div className="space-y-5 overflow-x-hidden w-full max-w-full pb-4">
       {/* ============================================================
           Personalized Header
           ============================================================ */}

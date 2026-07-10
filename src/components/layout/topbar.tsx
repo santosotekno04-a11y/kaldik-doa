@@ -27,9 +27,9 @@ export function Topbar() {
   const segments = pathname.split("/").filter(Boolean);
 
   return (
-    <header className="sticky top-0 z-30 flex items-center justify-between h-14 px-4 lg:px-6 bg-white border-b border-slate-200">
+    <header className="sticky top-0 z-30 flex items-center justify-between h-14 px-4 lg:px-6 bg-white border-b border-slate-200 overflow-hidden">
       {/* Breadcrumb */}
-      <nav className="flex items-center gap-1 text-sm min-w-0">
+      <nav className="flex items-center gap-1 text-sm min-w-0 overflow-hidden">
         <Link
           href="/dashboard"
           className="text-slate-500 hover:text-slate-700 transition-colors"
