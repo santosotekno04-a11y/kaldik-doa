@@ -470,16 +470,12 @@ export default function KaryawanPage() {
         });
 
         const tanggal_lahir = parseImportDate(fieldValues['tanggal_lahir']);
-        const bulan_lahir = tanggal_lahir
-          ? new Date(tanggal_lahir + 'T00:00:00').getMonth() + 1
-          : null;
 
-        // Base payload with required columns only
+        // Base payload - do NOT include bulan_lahir (GENERATED ALWAYS AS column)
         const basePayload: Record<string, unknown> = {
           karyawan_id: fieldValues['karyawan_id'] || `KRY-${Date.now()}-${success}`,
           nama: fieldValues['nama'],
           tanggal_lahir,
-          bulan_lahir,
           status: 'Aktif',
         };
 

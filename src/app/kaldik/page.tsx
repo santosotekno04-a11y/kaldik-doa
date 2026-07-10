@@ -993,6 +993,34 @@ export default function KaldikPage() {
         description="Kelola agenda kegiatan kalender pendidikan"
         action={
           <div className="flex items-center gap-2">
+            {/* View Toggle - always visible */}
+            <div className="flex items-center bg-gray-100 rounded-lg p-0.5">
+              <button
+                onClick={() => setViewMode("table")}
+                className={cn(
+                  "inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-all",
+                  viewMode === "table"
+                    ? "bg-white text-indigo-700 shadow-sm"
+                    : "text-gray-500 hover:text-gray-700"
+                )}
+              >
+                <List size={14} />
+                <span className="hidden sm:inline">Tabel</span>
+              </button>
+              <button
+                onClick={() => setViewMode("calendar")}
+                className={cn(
+                  "inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md transition-all",
+                  viewMode === "calendar"
+                    ? "bg-white text-indigo-700 shadow-sm"
+                    : "text-gray-500 hover:text-gray-700"
+                )}
+              >
+                <CalendarDays size={14} />
+                <span className="hidden sm:inline">Kalender</span>
+              </button>
+            </div>
+
             {duplicates.size > 0 && (
               <button
                 onClick={() => setShowDuplicatesModal(true)}
