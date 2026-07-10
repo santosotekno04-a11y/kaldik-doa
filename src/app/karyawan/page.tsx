@@ -464,22 +464,44 @@ export default function KaryawanPage() {
           ? new Date(tanggal_lahir + 'T00:00:00').getMonth() + 1
           : null;
 
-        const payload: Record<string, unknown> = {
+        // Base payload with required columns only
+        const basePayload: Record<string, unknown> = {
           karyawan_id: fieldValues['karyawan_id'] || `KRY-${Date.now()}-${success}`,
           nama: fieldValues['nama'],
-          nama_panggilan: fieldValues['nama_panggilan'] || null,
           tanggal_lahir,
           bulan_lahir,
           status: 'Aktif',
-          sumber_data: 'Import',
         };
 
-        const { error } = await supabase.from('karyawan').insert(payload);
-        if (error) throw error;
+        // Try insert with full payload first, fallback to base if columns missing
+        let insertError: { message: string } | null = null;
+        try {
+          const fullPayload = {
+            ...basePayload,
+            nama_panggilan: fieldValues['nama_panggilan'] || null,
+            sumber_data: 'Import',
+          };
+          const { error } = await supabase.from('karyawan').insert(fullPayload);
+          if (error) throw error;
+        } catch (fullErr: unknown) {
+          const errMsg = fullErr instanceof Error ? fullErr.message : String(fullErr);
+          // If error is about missing column, retry with base payload
+          if (errMsg.includes('column') || errMsg.includes('schema') || errMsg.includes('Could not find')) {
+            const { error: baseErr } = await supabase.from('karyawan').insert(basePayload);
+            if (baseErr) {
+              insertError = baseErr;
+            }
+          } else {
+            insertError = fullErr instanceof Error ? fullErr : new Error(errMsg);
+          }
+        }
+
+        if (insertError) throw insertError;
         success++;
-      } catch {
+      } catch (err: unknown) {
         rejected++;
-        rejectedReasons.push(`Baris ${i + 2}: Gagal menyimpan ke database`);
+        const errMsg = err instanceof Error ? err.message : String(err);
+        rejectedReasons.push(`Baris ${i + 2}: ${errMsg || 'Gagal menyimpan ke database'}`);
       }
     }
     setImportResult({ success, rejected, rejectedReasons });
