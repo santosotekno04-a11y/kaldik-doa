@@ -1,11 +1,9 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { Sidebar } from "@/components/layout/sidebar";
-import { MobileNav } from "@/components/layout/mobile-nav";
-import { Topbar } from "@/components/layout/topbar";
 import { ToastProvider } from "@/components/ui/toast";
 import { AuthGuard } from "@/components/auth/auth-guard";
+import { AppShell } from "@/components/layout/app-shell";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -36,17 +34,7 @@ export default function RootLayout({
       <body className="min-h-full flex">
         <ToastProvider>
           <AuthGuard>
-            {/* Desktop Sidebar */}
-            <Sidebar />
-
-            {/* Main Content */}
-            <div className="flex-1 flex flex-col min-h-screen">
-              <Topbar />
-              <main className="flex-1 p-4 lg:p-6 pb-20 lg:pb-6">{children}</main>
-            </div>
-
-            {/* Mobile Bottom Nav */}
-            <MobileNav />
+            <AppShell>{children}</AppShell>
           </AuthGuard>
         </ToastProvider>
       </body>

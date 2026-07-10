@@ -4,9 +4,8 @@ export const dynamic = 'force-dynamic';
 import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { Lock, Loader2, Eye, EyeOff } from "lucide-react";
+import { Loader2, Eye, EyeOff } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
-import { cn } from "@/lib/utils/cn";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -91,32 +90,44 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-[70vh]">
-      <div className="w-full max-w-sm">
-        {/* Card */}
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-          {/* Header */}
-          <div className="px-6 pt-8 pb-4 text-center">
-            <div className="w-20 h-20 mx-auto mb-4 rounded-2xl overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gradient-to-br from-blue-600 via-blue-700 to-slate-800">
+      {/* Decorative background elements */}
+      <div className="absolute inset-0 overflow-hidden">
+        <div className="absolute -top-40 -right-40 w-96 h-96 rounded-full bg-blue-500/20 blur-3xl" />
+        <div className="absolute -bottom-40 -left-40 w-96 h-96 rounded-full bg-slate-600/30 blur-3xl" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-blue-400/10 blur-3xl" />
+      </div>
+
+      {/* Login Card */}
+      <div className="relative w-full max-w-xs mx-4">
+        <div className="bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl shadow-blue-900/30 overflow-hidden border border-white/20">
+          {/* Header with gradient accent */}
+          <div className="relative px-6 pt-8 pb-5 text-center">
+            {/* Subtle gradient bar at top */}
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-400 via-blue-600 to-blue-800" />
+
+            <div className="w-16 h-16 mx-auto mb-3 rounded-xl overflow-hidden shadow-lg shadow-blue-900/10 ring-2 ring-blue-100">
               <Image
                 src="/logo-tbi.png"
                 alt="Logo TBI"
-                width={80}
-                height={80}
+                width={64}
+                height={64}
                 className="w-full h-full object-contain"
                 priority
               />
             </div>
-            <h1 className="text-xl font-bold text-slate-900">{appName}</h1>
-            <p className="text-sm text-slate-500 mt-1">
+            <h1 className="text-lg font-bold text-slate-800 tracking-tight">
+              {appName}
+            </h1>
+            <p className="text-xs text-slate-400 mt-1 font-medium">
               Masukkan PIN untuk mengakses aplikasi
             </p>
           </div>
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="px-6 pb-6">
+          <form onSubmit={handleSubmit} className="px-6 pb-7">
             {/* PIN Input */}
-            <div className="relative mb-4">
+            <div className="relative mb-3">
               <input
                 ref={inputRef}
                 type={showPin ? "text" : "password"}
@@ -124,88 +135,87 @@ export default function LoginPage() {
                 maxLength={4}
                 value={pin}
                 onChange={(e) => handlePinChange(e.target.value)}
-                placeholder="Masukkan 4 digit PIN"
+                placeholder="PIN"
                 autoComplete="off"
-                className={cn(
-                  "w-full px-4 py-3 text-center text-2xl tracking-[0.5em] font-mono border rounded-xl focus:outline-none focus:ring-2 focus:border-transparent",
+                className={`w-full px-4 py-2.5 text-center text-base tracking-[0.35em] font-semibold font-mono border rounded-xl focus:outline-none focus:ring-2 focus:border-transparent transition-all ${
                   error
-                    ? "border-red-300 focus:ring-red-500"
-                    : "border-slate-300 focus:ring-indigo-500"
-                )}
+                    ? "border-red-300 focus:ring-red-400 bg-red-50/50"
+                    : "border-slate-200 focus:ring-blue-500 bg-slate-50/50"
+                }`}
               />
               <button
                 type="button"
                 onClick={() => setShowPin(!showPin)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
                 tabIndex={-1}
               >
-                {showPin ? <EyeOff size={18} /> : <Eye size={18} />}
+                {showPin ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>
 
             {/* Error message */}
             {error && (
-              <p className="text-sm text-red-500 text-center mb-4">{error}</p>
+              <p className="text-xs text-red-500 text-center mb-3 font-medium">
+                {error}
+              </p>
             )}
 
             {/* PIN dots indicator */}
-            <div className="flex items-center justify-center gap-3 mb-4">
+            <div className="flex items-center justify-center gap-2.5 mb-4">
               {[0, 1, 2, 3].map((i) => (
                 <div
                   key={i}
-                  className={cn(
-                    "w-3 h-3 rounded-full transition-all duration-150",
+                  className={`w-2.5 h-2.5 rounded-full transition-all duration-200 ${
                     i < pin.length
-                      ? "bg-indigo-600 scale-110"
+                      ? "bg-blue-600 scale-110 shadow-sm shadow-blue-600/40"
                       : "bg-slate-200"
-                  )}
+                  }`}
                 />
               ))}
-            </div>
-
-            {/* Forgot PIN */}
-            <div className="text-center mb-4">
-              <button
-                type="button"
-                onClick={() => setShowForgotPin(!showForgotPin)}
-                className="text-sm text-indigo-600 hover:text-indigo-800 hover:underline transition-colors"
-              >
-                Lupa PIN?
-              </button>
-              {showForgotPin && (
-                <div className="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                  <p className="text-xs text-amber-700">
-                    Hubungi administrator untuk reset PIN, atau akses langsung melalui Supabase Dashboard
-                  </p>
-                </div>
-              )}
             </div>
 
             {/* Submit button */}
             <button
               type="submit"
               disabled={loading || pin.length !== 4}
-              className={cn(
-                "w-full flex items-center justify-center gap-2 py-3 text-sm font-semibold text-white rounded-xl transition-colors",
+              className={`w-full flex items-center justify-center gap-2 py-2.5 text-sm font-semibold text-white rounded-xl transition-all duration-200 ${
                 loading || pin.length !== 4
                   ? "bg-slate-300 cursor-not-allowed"
-                  : "bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800"
-              )}
+                  : "bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 active:from-blue-800 active:to-blue-900 shadow-lg shadow-blue-600/25 hover:shadow-blue-700/30"
+              }`}
             >
               {loading ? (
                 <>
-                  <Loader2 size={18} className="animate-spin" />
+                  <Loader2 size={16} className="animate-spin" />
                   Memverifikasi...
                 </>
               ) : (
                 "Masuk"
               )}
             </button>
+
+            {/* Forgot PIN */}
+            <div className="text-center mt-4">
+              <button
+                type="button"
+                onClick={() => setShowForgotPin(!showForgotPin)}
+                className="text-xs text-blue-600 hover:text-blue-800 font-medium transition-colors"
+              >
+                Lupa PIN?
+              </button>
+              {showForgotPin && (
+                <div className="mt-2 p-2.5 bg-amber-50 border border-amber-200 rounded-lg">
+                  <p className="text-[11px] text-amber-700 leading-relaxed">
+                    Hubungi administrator untuk reset PIN
+                  </p>
+                </div>
+              )}
+            </div>
           </form>
         </div>
 
-        {/* Footer hint */}
-        <p className="text-center text-xs text-slate-400 mt-4">
+        {/* Footer */}
+        <p className="text-center text-[11px] text-blue-200/60 mt-5 font-medium">
           Hubungi admin jika lupa PIN
         </p>
       </div>
