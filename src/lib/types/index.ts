@@ -237,37 +237,40 @@ export interface DashboardSummary {
 }
 
 // ============================================================
-// Jadwal Types
+// Jadwal Ibadah Types
 // ============================================================
 
-export interface Jadwal {
+export interface JadwalIbadah {
   id: string;
-  jadwal_id: string;
-  nama_jadwal: string;
-  unit_id: string;
   tahun_ajaran: string;
-  semester: number;
-  keterangan: string;
+  bulan: string;
+  tanggal: string;
+  pelayan_ibadah: string;
+  pemberita_firman: string;
+  tema_ibadah_bulanan: string;
+  nas_alkitab: string;
   catatan: string;
-  status: string;
-  spreadsheet_row_id: number | null;
+  urutan: number;
   created_at: string;
   updated_at: string;
-  unit?: Unit;
-  items?: JadwalItem[];
 }
 
-export interface JadwalItem {
+export interface JadwalHolyMorning {
   id: string;
-  jadwal_id: string;
-  hari: string;
-  jam_mulai: string;
-  jam_selesai: string;
-  nama_slot: string;
-  mata_pelajaran: string;
-  pengajar: string;
-  ruangan: string;
-  warna: string;
+  tahun_ajaran: string;
+  bulan: string;
+  tanggal: string;
+  christian_worldview: string;
+  profil: string;
+  bestra: string;
+  karakter: string;
+  tema_bulanan: string;
+  tema_mingguan: string;
+  nas_alkitab: string;
+  tujuan: string;
+  pelayan_holy_morning: string;
+  keterangan: string;
+  catatan: string;
   urutan: number;
   created_at: string;
   updated_at: string;

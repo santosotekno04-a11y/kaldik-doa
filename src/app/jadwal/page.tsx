@@ -2,1362 +2,1464 @@
 export const dynamic = 'force-dynamic';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import {
-  Plus,
-  Edit2,
-  Trash2,
-  Loader2,
-  ArrowLeft,
-  Camera,
-  Share2,
-  Calendar,
-  Clock,
-  ChevronDown,
-  ChevronUp,
-  GripVertical,
-  X,
-} from 'lucide-react';
 import { Modal, ConfirmDialog } from '@/components/ui/modal';
-import { UnitBadge } from '@/components/ui/unit-badge';
-import { StatusBadge } from '@/components/ui/status-badge';
 import { Input, Select, Textarea } from '@/components/ui/form-controls';
-import { SearchBar, PageHeader, EmptyState } from '@/components/ui/filter-bar';
+import { SearchBar, PageHeader, FilterSelect } from '@/components/ui/filter-bar';
 import { useToast } from '@/components/ui/toast';
 import { supabase } from '@/lib/supabase/client';
-import html2canvas from 'html2canvas-pro';
 import { cn } from '@/lib/utils/cn';
-import { generateId } from '@/lib/utils/format';
-import { getCurrentTahunAjaran } from '@/lib/utils/date';
-import type { Jadwal, JadwalItem, Unit } from '@/lib/types';
+import html2canvas from 'html2canvas-pro';
+import {
+  Plus, Upload, Camera, Share2, Edit2, Trash2, Copy,
+  ChevronLeft, ChevronRight, Loader2, Search, FileSpreadsheet, X,
+} from 'lucide-react';
 
-// ── Types ──────────────────────────────────────────────────────
-type JadwalWithUnit = Jadwal & {
-  unit: { id: string; code: string; name: string; color: string } | null;
+/* ─── Constants ─────────────────────────────────────────────────────────── */
+
+const BULAN_OPTIONS = [
+  'JANUARI', 'FEBRUARI', 'MARET', 'APRIL', 'MEI', 'JUNI',
+  'JULI', 'AGUSTUS', 'SEPTEMBER', 'OKTOBER', 'NOVEMBER', 'DESEMBER',
+];
+
+const BULAN_SELECT_OPTIONS = BULAN_OPTIONS.map((b) => ({ value: b, label: b }));
+
+const IBADAH_HEADER_MAP: Record<string, string> = {
+  'bulan': 'bulan', 'bln': 'bulan',
+  'tanggal': 'tanggal', 'tgl': 'tanggal', 'tangal': 'tanggal',
+  'pelayan ibadah': 'pelayan_ibadah', 'pelayan_ibadah': 'pelayan_ibadah', 'pelayan': 'pelayan_ibadah',
+  'pemberita firman': 'pemberita_firman', 'pemberita_firman': 'pemberita_firman', 'pemberita': 'pemberita_firman', 'pengkhotbah': 'pemberita_firman',
+  'tema ibadah bulanan': 'tema_ibadah_bulanan', 'tema_ibadah': 'tema_ibadah_bulanan', 'tema': 'tema_ibadah_bulanan',
+  'nas alkitab': 'nas_alkitab', 'nas_alkitab': 'nas_alkitab', 'ayat': 'nas_alkitab', 'nas': 'nas_alkitab',
 };
 
-type ViewMode = 'list' | 'detail' | 'form';
+const HM_HEADER_MAP: Record<string, string> = {
+  'bulan': 'bulan', 'bln': 'bulan',
+  'tanggal': 'tanggal', 'tgl': 'tanggal',
+  'christian worldview': 'christian_worldview', 'christian_worldview': 'christian_worldview', 'worldview': 'christian_worldview',
+  'profil': 'profil',
+  'bestra': 'bestra',
+  'karakter': 'karakter',
+  'tema bulanan': 'tema_bulanan', 'tema_bulanan': 'tema_bulanan',
+  'tema mingguan': 'tema_mingguan', 'tema_mingguan': 'tema_mingguan',
+  'nas alkitab': 'nas_alkitab', 'nas_alkitab': 'nas_alkitab', 'ayat': 'nas_alkitab',
+  'tujuan': 'tujuan',
+  'pelayan holy morning': 'pelayan_holy_morning', 'pelayan_holy_morning': 'pelayan_holy_morning', 'pelayan': 'pelayan_holy_morning',
+  'keterangan': 'keterangan', 'ket': 'keterangan', 'keter': 'keterangan',
+};
 
-interface SlotData {
-  jam_mulai: string;
-  jam_selesai: string;
-  nama_slot: string;
+/* ─── Types ─────────────────────────────────────────────────────────────── */
+
+type TabType = 'ibadah' | 'holy_morning';
+
+interface IbadahRow {
+  id: string;
+  tahun_ajaran: string;
+  bulan: string;
+  tanggal: string;
+  pelayan_ibadah: string;
+  pemberita_firman: string;
+  tema_ibadah_bulanan: string;
+  nas_alkitab: string;
+  catatan: string | null;
+  urutan: number | null;
+  created_at: string;
+  updated_at: string;
 }
 
-interface CellKey {
-  slotIndex: number;
-  hari: string;
+interface HolyMorningRow {
+  id: string;
+  tahun_ajaran: string;
+  bulan: string;
+  tanggal: string;
+  christian_worldview: string;
+  profil: string;
+  bestra: string;
+  karakter: string;
+  tema_bulanan: string;
+  tema_mingguan: string;
+  nas_alkitab: string;
+  tujuan: string;
+  pelayan_holy_morning: string;
+  keterangan: string;
+  catatan: string | null;
+  urutan: number | null;
+  created_at: string;
+  updated_at: string;
 }
 
-// ── Constants ──────────────────────────────────────────────────
-const HARI_OPTIONS = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+interface IbadahForm {
+  bulan: string;
+  tanggal: string;
+  pelayan_ibadah: string;
+  pemberita_firman: string;
+  tema_ibadah_bulanan: string;
+  nas_alkitab: string;
+  catatan: string;
+}
 
-const DEFAULT_SLOTS: SlotData[] = [
-  { jam_mulai: '07:00', jam_selesai: '10:00', nama_slot: 'Pagi' },
-  { jam_mulai: '10:00', jam_selesai: '10:15', nama_slot: 'Istirahat' },
-  { jam_mulai: '10:15', jam_selesai: '12:00', nama_slot: 'Pagi 2' },
-  { jam_mulai: '13:00', jam_selesai: '15:00', nama_slot: 'Siang' },
-];
+interface HolyMorningForm {
+  bulan: string;
+  tanggal: string;
+  christian_worldview: string;
+  profil: string;
+  bestra: string;
+  karakter: string;
+  tema_bulanan: string;
+  tema_mingguan: string;
+  nas_alkitab: string;
+  tujuan: string;
+  pelayan_holy_morning: string;
+  keterangan: string;
+  catatan: string;
+}
 
-const SEMESTER_OPTIONS = [
-  { value: '1', label: 'Semester 1' },
-  { value: '2', label: 'Semester 2' },
-];
+const EMPTY_IBADAH_FORM: IbadahForm = {
+  bulan: '', tanggal: '', pelayan_ibadah: '', pemberita_firman: '',
+  tema_ibadah_bulanan: '', nas_alkitab: '', catatan: '',
+};
 
-const STATUS_OPTIONS = [
-  { value: 'Draft', label: 'Draft' },
-  { value: 'Aktif', label: 'Aktif' },
-  { value: 'Nonaktif', label: 'Nonaktif' },
-];
+const EMPTY_HM_FORM: HolyMorningForm = {
+  bulan: '', tanggal: '', christian_worldview: '', profil: '', bestra: '',
+  karakter: '', tema_bulanan: '', tema_mingguan: '', nas_alkitab: '',
+  tujuan: '', pelayan_holy_morning: '', keterangan: '', catatan: '',
+};
 
-function generateTahunAjaranOptions() {
-  const currentYear = new Date().getFullYear();
-  const options = [];
-  for (let y = currentYear - 2; y <= currentYear + 2; y++) {
-    options.push({ value: `${y}-${y + 1}`, label: `${y}-${y + 1}` });
+/* ─── CSV Parsing Utilities ─────────────────────────────────────────────── */
+
+function detectDelimiter(text: string): string {
+  const firstLine = text.split('\n')[0];
+  const tabCount = (firstLine.match(/\t/g) || []).length;
+  const semiCount = (firstLine.match(/;/g) || []).length;
+  const commaCount = (firstLine.match(/,/g) || []).length;
+  if (tabCount > semiCount && tabCount > commaCount) return '\t';
+  if (semiCount > commaCount) return ';';
+  return ',';
+}
+
+function parseCSV(text: string, delimiter: string): string[][] {
+  const lines: string[][] = [];
+  let current: string[] = [];
+  let inQuotes = false;
+  let field = '';
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (i + 1 < text.length && text[i + 1] === '"') {
+          field += '"';
+          i++;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        field += ch;
+      }
+    } else {
+      if (ch === '"') {
+        inQuotes = true;
+      } else if (ch === delimiter) {
+        current.push(field.trim());
+        field = '';
+      } else if (ch === '\n' || ch === '\r') {
+        if (ch === '\r' && i + 1 < text.length && text[i + 1] === '\n') i++;
+        current.push(field.trim());
+        if (current.some((c) => c !== '')) lines.push(current);
+        current = [];
+        field = '';
+      } else {
+        field += ch;
+      }
+    }
   }
-  return options;
+  current.push(field.trim());
+  if (current.some((c) => c !== '')) lines.push(current);
+
+  return lines;
 }
 
-const TAHUN_AJARAN_OPTIONS = generateTahunAjaranOptions();
-
-const HARI_BG_COLORS: Record<string, string> = {
-  Senin: 'bg-indigo-600',
-  Selasa: 'bg-blue-600',
-  Rabu: 'bg-emerald-600',
-  Kamis: 'bg-amber-600',
-  Jumat: 'bg-rose-600',
-  Sabtu: 'bg-purple-600',
-};
-
-const HARI_HEADER_TEXT: Record<string, string> = {
-  Senin: 'Senin',
-  Selasa: 'Selasa',
-  Rabu: 'Rabu',
-  Kamis: 'Kamis',
-  Jumat: 'Jumat',
-  Sabtu: 'Sabtu',
-};
-
-// ── Helpers ────────────────────────────────────────────────────
-function getCellKey(slotIndex: number, hari: string): string {
-  return `${slotIndex}-${hari}`;
+function mapHeaders(headers: string[], headerMap: Record<string, string>): Record<number, string> {
+  const mapping: Record<number, string> = {};
+  headers.forEach((h, i) => {
+    const key = h.toLowerCase().trim();
+    if (headerMap[key]) mapping[i] = headerMap[key];
+  });
+  return mapping;
 }
 
-function isIstirahat(slot: SlotData): boolean {
-  return slot.nama_slot.toLowerCase().includes('istirahat');
-}
+/* ─── Page Component ────────────────────────────────────────────────────── */
 
-// ── Component ──────────────────────────────────────────────────
 export default function JadwalPage() {
   const { addToast } = useToast();
 
-  // ── Data State ─────────────────────────────────────────────
-  const [jadwalList, setJadwalList] = useState<JadwalWithUnit[]>([]);
-  const [units, setUnits] = useState<Unit[]>([]);
+  // Tab state
+  const [activeTab, setActiveTab] = useState<TabType>('ibadah');
+
+  // Data state
+  const [ibadahData, setIbadahData] = useState<IbadahRow[]>([]);
+  const [hmData, setHmData] = useState<HolyMorningRow[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // ── View State ─────────────────────────────────────────────
-  const [view, setView] = useState<ViewMode>('list');
-  const [selectedJadwal, setSelectedJadwal] = useState<JadwalWithUnit | null>(null);
-  const [jadwalItems, setJadwalItems] = useState<JadwalItem[]>([]);
-  const [loadingDetail, setLoadingDetail] = useState(false);
-
-  // ── Search State ───────────────────────────────────────────
+  // Filters
+  const [tahunAjaran, setTahunAjaran] = useState('2026-2027');
+  const [filterBulan, setFilterBulan] = useState('');
   const [search, setSearch] = useState('');
 
-  // ── Form State ─────────────────────────────────────────────
-  const [editingJadwal, setEditingJadwal] = useState<JadwalWithUnit | null>(null);
+  // CRUD modal state
+  const [showFormModal, setShowFormModal] = useState(false);
+  const [editingIbadah, setEditingIbadah] = useState<IbadahRow | null>(null);
+  const [editingHM, setEditingHM] = useState<HolyMorningRow | null>(null);
+  const [ibadahForm, setIbadahForm] = useState<IbadahForm>(EMPTY_IBADAH_FORM);
+  const [hmForm, setHmForm] = useState<HolyMorningForm>(EMPTY_HM_FORM);
   const [saving, setSaving] = useState(false);
-  const [formData, setFormData] = useState({
-    nama_jadwal: '',
-    unit_id: '',
-    tahun_ajaran: getCurrentTahunAjaran(),
-    semester: '1',
-    keterangan: '',
-    catatan: '',
-    status: 'Draft',
-  });
-  const [slots, setSlots] = useState<SlotData[]>(DEFAULT_SLOTS);
-  const [cellValues, setCellValues] = useState<Record<string, { mata_pelajaran: string; pengajar: string }>>({});
-  const [activeDays, setActiveDays] = useState<string[]>(['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat']);
 
-  // ── Mobile Accordion State ─────────────────────────────────
-  const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set(HARI_OPTIONS));
+  // Delete state
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; type: TabType } | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
-  // ── Confirm Dialog State ───────────────────────────────────
-  const [confirmState, setConfirmState] = useState({
-    open: false,
-    title: '',
-    message: '',
-    onConfirm: () => {},
-    variant: 'danger' as 'danger' | 'primary',
-    loading: false,
-  });
+  // CSV import state
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [csvText, setCsvText] = useState('');
+  const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [parsedCsv, setParsedCsv] = useState<Record<string, string>[]>([]);
+  const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
+  const [csvErrors, setCsvErrors] = useState<number>(0);
+  const [importing, setImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // ── Refs ───────────────────────────────────────────────────
-  const gridRef = useRef<HTMLDivElement>(null);
+  // Screenshot state
+  const [screenshotting, setScreenshotting] = useState(false);
+  const tableContainerRef = useRef<HTMLDivElement>(null);
   const screenshotRef = useRef<HTMLDivElement>(null);
 
-  // ── Derived ────────────────────────────────────────────────
-  const unitOptions = units.map((u) => ({ value: u.id, label: u.name }));
+  /* ─── Tahun Ajaran Options ─── */
+  const tahunAjaranOptions = [
+    { value: '2024-2025', label: '2024-2025' },
+    { value: '2025-2026', label: '2025-2026' },
+    { value: '2026-2027', label: '2026-2027' },
+    { value: '2027-2028', label: '2027-2028' },
+    { value: '2028-2029', label: '2028-2029' },
+  ];
 
-  const filteredList = jadwalList.filter((j) => {
-    if (search && !j.nama_jadwal.toLowerCase().includes(search.toLowerCase())) return false;
-    return true;
-  });
+  /* ─── Fetch Data ──────────────────────────────────────────────────────── */
 
-  // ── Data Fetching ──────────────────────────────────────────
-  const fetchUnits = useCallback(async () => {
-    try {
-      const { data, error } = await supabase
-        .from('units')
-        .select('*')
-        .eq('is_active', true)
-        .order('code');
-      if (error) throw error;
-      setUnits(data || []);
-    } catch (err) {
-      console.error('Gagal memuat unit:', err);
-    }
-  }, []);
+  const fetchIbadah = useCallback(async () => {
+    const { data: rows, error } = await supabase
+      .from('jadwal_ibadah')
+      .select('*')
+      .eq('tahun_ajaran', tahunAjaran)
+      .order('urutan', { ascending: true, nullsFirst: false })
+      .order('tanggal', { ascending: true });
+    if (error) throw error;
+    setIbadahData((rows || []) as unknown as IbadahRow[]);
+  }, [tahunAjaran]);
 
-  const fetchJadwal = useCallback(async () => {
+  const fetchHM = useCallback(async () => {
+    const { data: rows, error } = await supabase
+      .from('jadwal_holy_morning')
+      .select('*')
+      .eq('tahun_ajaran', tahunAjaran)
+      .order('urutan', { ascending: true, nullsFirst: false })
+      .order('tanggal', { ascending: true });
+    if (error) throw error;
+    setHmData((rows || []) as unknown as HolyMorningRow[]);
+  }, [tahunAjaran]);
+
+  const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('jadwal')
-        .select('*, unit:units(id, code, name, color)')
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      setJadwalList((data || []) as JadwalWithUnit[]);
-    } catch (err) {
-      console.error('Gagal memuat jadwal:', err);
+      await Promise.all([fetchIbadah(), fetchHM()]);
+    } catch {
       addToast('error', 'Gagal memuat data jadwal');
     } finally {
       setLoading(false);
     }
-  }, [addToast]);
-
-  const fetchJadwalItems = useCallback(
-    async (jadwalId: string) => {
-      setLoadingDetail(true);
-      try {
-        const { data, error } = await supabase
-          .from('jadwal_items')
-          .select('*')
-          .eq('jadwal_id', jadwalId)
-          .order('urutan');
-        if (error) throw error;
-        setJadwalItems(data || []);
-      } catch (err) {
-        console.error('Gagal memuat item jadwal:', err);
-        addToast('error', 'Gagal memuat detail jadwal');
-      } finally {
-        setLoadingDetail(false);
-      }
-    },
-    [addToast]
-  );
+  }, [fetchIbadah, fetchHM, addToast]);
 
   useEffect(() => {
-    fetchUnits();
-  }, [fetchUnits]);
+    fetchData();
+  }, [fetchData]);
 
-  useEffect(() => {
-    fetchJadwal();
-  }, [fetchJadwal]);
+  /* ─── Filtered Data ───────────────────────────────────────────────────── */
 
-  // ── View Transitions ───────────────────────────────────────
-  const goToList = useCallback(() => {
-    setView('list');
-    setSelectedJadwal(null);
-    setJadwalItems([]);
-    fetchJadwal();
-  }, [fetchJadwal]);
-
-  const goToDetail = useCallback(
-    async (jadwal: JadwalWithUnit) => {
-      setSelectedJadwal(jadwal);
-      setView('detail');
-      await fetchJadwalItems(jadwal.id);
-    },
-    [fetchJadwalItems]
-  );
-
-  const goToCreateForm = useCallback(() => {
-    setEditingJadwal(null);
-    setFormData({
-      nama_jadwal: '',
-      unit_id: '',
-      tahun_ajaran: getCurrentTahunAjaran(),
-      semester: '1',
-      keterangan: '',
-      catatan: '',
-      status: 'Draft',
-    });
-    setSlots([...DEFAULT_SLOTS]);
-    setCellValues({});
-    setActiveDays(['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat']);
-    setView('form');
-  }, []);
-
-  const goToEditForm = useCallback(
-    (jadwal: JadwalWithUnit, items: JadwalItem[]) => {
-      setEditingJadwal(jadwal);
-      setFormData({
-        nama_jadwal: jadwal.nama_jadwal,
-        unit_id: jadwal.unit_id,
-        tahun_ajaran: jadwal.tahun_ajaran,
-        semester: String(jadwal.semester),
-        keterangan: jadwal.keterangan || '',
-        catatan: jadwal.catatan || '',
-        status: jadwal.status || 'Draft',
-      });
-
-      // Reconstruct slots and cell values from items
-      const slotMap = new Map<string, SlotData>();
-      const cells: Record<string, { mata_pelajaran: string; pengajar: string }> = {};
-      const daysSet = new Set<string>();
-
-      items.forEach((item) => {
-        const slotKey = `${item.jam_mulai}-${item.jam_selesai}-${item.nama_slot}`;
-        if (!slotMap.has(slotKey)) {
-          slotMap.set(slotKey, {
-            jam_mulai: item.jam_mulai,
-            jam_selesai: item.jam_selesai,
-            nama_slot: item.nama_slot,
-          });
-        }
-        daysSet.add(item.hari);
-      });
-
-      const reconstructedSlots = Array.from(slotMap.values());
-      setSlots(reconstructedSlots.length > 0 ? reconstructedSlots : [...DEFAULT_SLOTS]);
-
-      items.forEach((item) => {
-        const slotIdx = reconstructedSlots.findIndex(
-          (s) => s.jam_mulai === item.jam_mulai && s.jam_selesai === item.jam_selesai && s.nama_slot === item.nama_slot
-        );
-        if (slotIdx >= 0) {
-          cells[getCellKey(slotIdx, item.hari)] = {
-            mata_pelajaran: item.mata_pelajaran || '',
-            pengajar: item.pengajar || '',
-          };
-        }
-      });
-      setCellValues(cells);
-      setActiveDays(Array.from(daysSet).length > 0 ? Array.from(daysSet) : ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat']);
-      setView('form');
-    },
-    []
-  );
-
-  // ── Form Helpers ───────────────────────────────────────────
-  const handleFormChange = useCallback((field: string, value: string) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
-  }, []);
-
-  const updateCell = useCallback(
-    (slotIndex: number, hari: string, field: 'mata_pelajaran' | 'pengajar', value: string) => {
-      const key = getCellKey(slotIndex, hari);
-      setCellValues((prev) => ({
-        ...prev,
-        [key]: {
-          ...(prev[key] || { mata_pelajaran: '', pengajar: '' }),
-          [field]: value,
-        },
-      }));
-    },
-    []
-  );
-
-  const addSlot = useCallback(() => {
-    setSlots((prev) => [...prev, { jam_mulai: '', jam_selesai: '', nama_slot: '' }]);
-  }, []);
-
-  const removeSlot = useCallback(
-    (index: number) => {
-      setSlots((prev) => prev.filter((_, i) => i !== index));
-      // Clean up cell values for removed slot
-      setCellValues((prev) => {
-        const next: typeof prev = {};
-        Object.entries(prev).forEach(([key, val]) => {
-          const slotIdx = parseInt(key.split('-')[0], 10);
-          if (slotIdx !== index) {
-            const newIdx = slotIdx > index ? slotIdx - 1 : slotIdx;
-            const hari = key.split('-').slice(1).join('-');
-            next[getCellKey(newIdx, hari)] = val;
-          }
-        });
-        return next;
-      });
-    },
-    []
-  );
-
-  const updateSlot = useCallback((index: number, field: keyof SlotData, value: string) => {
-    setSlots((prev) => prev.map((s, i) => (i === index ? { ...s, [field]: value } : s)));
-  }, []);
-
-  const toggleDay = useCallback((hari: string) => {
-    setActiveDays((prev) => {
-      if (prev.includes(hari)) {
-        return prev.filter((d) => d !== hari);
-      }
-      return [...prev, hari].sort((a, b) => HARI_OPTIONS.indexOf(a) - HARI_OPTIONS.indexOf(b));
-    });
-  }, []);
-
-  // ── CRUD Handlers ──────────────────────────────────────────
-  const handleSubmit = useCallback(async () => {
-    if (!formData.nama_jadwal.trim()) {
-      addToast('warning', 'Nama jadwal wajib diisi');
-      return;
+  const filteredIbadah = ibadahData.filter((row) => {
+    if (filterBulan && row.bulan?.toUpperCase() !== filterBulan) return false;
+    if (search) {
+      const q = search.toLowerCase();
+      return (
+        row.tanggal?.toLowerCase().includes(q) ||
+        row.pelayan_ibadah?.toLowerCase().includes(q) ||
+        row.pemberita_firman?.toLowerCase().includes(q) ||
+        row.tema_ibadah_bulanan?.toLowerCase().includes(q) ||
+        row.nas_alkitab?.toLowerCase().includes(q)
+      );
     }
-    if (!formData.unit_id) {
-      addToast('warning', 'Unit wajib dipilih');
-      return;
-    }
+    return true;
+  });
 
-    // Validate slots
-    for (let i = 0; i < slots.length; i++) {
-      const slot = slots[i];
-      if (!slot.nama_slot.trim()) {
-        addToast('warning', `Slot #${i + 1}: Nama slot wajib diisi`);
-        return;
-      }
-      if (!slot.jam_mulai || !slot.jam_selesai) {
-        addToast('warning', `Slot "${slot.nama_slot}": Jam mulai dan selesai wajib diisi`);
-        return;
-      }
+  const filteredHM = hmData.filter((row) => {
+    if (filterBulan && row.bulan?.toUpperCase() !== filterBulan) return false;
+    if (search) {
+      const q = search.toLowerCase();
+      return (
+        row.tanggal?.toLowerCase().includes(q) ||
+        row.christian_worldview?.toLowerCase().includes(q) ||
+        row.profil?.toLowerCase().includes(q) ||
+        row.bestra?.toLowerCase().includes(q) ||
+        row.karakter?.toLowerCase().includes(q) ||
+        row.tema_bulanan?.toLowerCase().includes(q) ||
+        row.tema_mingguan?.toLowerCase().includes(q) ||
+        row.nas_alkitab?.toLowerCase().includes(q) ||
+        row.tujuan?.toLowerCase().includes(q) ||
+        row.pelayan_holy_morning?.toLowerCase().includes(q) ||
+        row.keterangan?.toLowerCase().includes(q)
+      );
     }
+    return true;
+  });
 
+  /* ─── CRUD: Add / Edit ────────────────────────────────────────────────── */
+
+  function openAddModal() {
+    setEditingIbadah(null);
+    setEditingHM(null);
+    setIbadahForm(EMPTY_IBADAH_FORM);
+    setHmForm(EMPTY_HM_FORM);
+    setShowFormModal(true);
+  }
+
+  function openEditModal(row: IbadahRow | HolyMorningRow, type: TabType) {
+    if (type === 'ibadah') {
+      const r = row as IbadahRow;
+      setEditingIbadah(r);
+      setEditingHM(null);
+      setIbadahForm({
+        bulan: r.bulan || '', tanggal: r.tanggal || '',
+        pelayan_ibadah: r.pelayan_ibadah || '', pemberita_firman: r.pemberita_firman || '',
+        tema_ibadah_bulanan: r.tema_ibadah_bulanan || '', nas_alkitab: r.nas_alkitab || '',
+        catatan: r.catatan || '',
+      });
+    } else {
+      const r = row as HolyMorningRow;
+      setEditingIbadah(null);
+      setEditingHM(r);
+      setHmForm({
+        bulan: r.bulan || '', tanggal: r.tanggal || '',
+        christian_worldview: r.christian_worldview || '', profil: r.profil || '',
+        bestra: r.bestra || '', karakter: r.karakter || '',
+        tema_bulanan: r.tema_bulanan || '', tema_mingguan: r.tema_mingguan || '',
+        nas_alkitab: r.nas_alkitab || '', tujuan: r.tujuan || '',
+        pelayan_holy_morning: r.pelayan_holy_morning || '', keterangan: r.keterangan || '',
+        catatan: r.catatan || '',
+      });
+    }
+    setShowFormModal(true);
+  }
+
+  async function handleSave() {
     setSaving(true);
     try {
-      const jadwalPayload = {
-        nama_jadwal: formData.nama_jadwal.trim(),
-        unit_id: formData.unit_id,
-        tahun_ajaran: formData.tahun_ajaran,
-        semester: Number(formData.semester),
-        keterangan: formData.keterangan || '',
-        catatan: formData.catatan || '',
-        status: formData.status,
-      };
-
-      let jadwalId: string;
-
-      if (editingJadwal) {
-        const { error } = await supabase
-          .from('jadwal')
-          .update(jadwalPayload)
-          .eq('id', editingJadwal.id);
-        if (error) throw error;
-        jadwalId = editingJadwal.id;
-
-        // Delete old items
-        const { error: delError } = await supabase
-          .from('jadwal_items')
-          .delete()
-          .eq('jadwal_id', jadwalId);
-        if (delError) throw delError;
+      if (activeTab === 'ibadah') {
+        const payload = { ...ibadahForm, tahun_ajaran: tahunAjaran };
+        if (editingIbadah) {
+          const { error } = await supabase
+            .from('jadwal_ibadah')
+            .update({ ...payload, updated_at: new Date().toISOString() })
+            .eq('id', editingIbadah.id);
+          if (error) throw error;
+          addToast('success', 'Jadwal ibadah berhasil diperbarui');
+        } else {
+          const { error } = await supabase
+            .from('jadwal_ibadah')
+            .insert([payload]);
+          if (error) throw error;
+          addToast('success', 'Jadwal ibadah berhasil ditambahkan');
+        }
       } else {
-        const { data: newJadwal, error } = await supabase
-          .from('jadwal')
-          .insert({ ...jadwalPayload, jadwal_id: generateId('JWL') })
-          .select()
-          .single();
-        if (error) throw error;
-        jadwalId = newJadwal.id;
+        const payload = { ...hmForm, tahun_ajaran: tahunAjaran };
+        if (editingHM) {
+          const { error } = await supabase
+            .from('jadwal_holy_morning')
+            .update({ ...payload, updated_at: new Date().toISOString() })
+            .eq('id', editingHM.id);
+          if (error) throw error;
+          addToast('success', 'Jadwal Holy Morning berhasil diperbarui');
+        } else {
+          const { error } = await supabase
+            .from('jadwal_holy_morning')
+            .insert([payload]);
+          if (error) throw error;
+          addToast('success', 'Jadwal Holy Morning berhasil ditambahkan');
+        }
       }
-
-      // Build items from slots × activeDays
-      const itemsToInsert: Record<string, unknown>[] = [];
-      let urutan = 1;
-      slots.forEach((slot, slotIdx) => {
-        activeDays.forEach((hari) => {
-          const key = getCellKey(slotIdx, hari);
-          const cell = cellValues[key];
-          const mataPelajaran = cell?.mata_pelajaran?.trim() || '';
-          const pengajar = cell?.pengajar?.trim() || '';
-
-          itemsToInsert.push({
-            jadwal_id: jadwalId,
-            hari,
-            jam_mulai: slot.jam_mulai,
-            jam_selesai: slot.jam_selesai,
-            nama_slot: slot.nama_slot,
-            mata_pelajaran: mataPelajaran,
-            pengajar: pengajar,
-            ruangan: '',
-            warna: isIstirahat(slot) ? 'gray' : 'indigo',
-            urutan: urutan++,
-          });
-        });
-      });
-
-      if (itemsToInsert.length > 0) {
-        const { error: insertError } = await supabase
-          .from('jadwal_items')
-          .insert(itemsToInsert);
-        if (insertError) throw insertError;
-      }
-
-      addToast('success', editingJadwal ? 'Jadwal berhasil diperbarui' : 'Jadwal berhasil ditambahkan');
-      goToList();
-    } catch (err) {
-      console.error('Gagal menyimpan jadwal:', err);
-      addToast('error', editingJadwal ? 'Gagal memperbarui jadwal' : 'Gagal menambahkan jadwal');
+      setShowFormModal(false);
+      fetchData();
+    } catch {
+      addToast('error', 'Gagal menyimpan data');
     } finally {
       setSaving(false);
     }
-  }, [formData, editingJadwal, slots, cellValues, activeDays, addToast, goToList]);
+  }
 
-  const handleDelete = useCallback(
-    (jadwal: JadwalWithUnit) => {
-      setConfirmState({
-        open: true,
-        title: 'Hapus Jadwal',
-        message: `Yakin ingin menghapus "${jadwal.nama_jadwal}" secara permanen? Semua data slot juga akan dihapus.`,
-        variant: 'danger',
-        loading: false,
-        onConfirm: async () => {
-          setConfirmState((prev) => ({ ...prev, loading: true }));
-          try {
-            const { error: delItemsErr } = await supabase
-              .from('jadwal_items')
-              .delete()
-              .eq('jadwal_id', jadwal.id);
-            if (delItemsErr) throw delItemsErr;
+  /* ─── CRUD: Delete ────────────────────────────────────────────────────── */
 
-            const { error } = await supabase
-              .from('jadwal')
-              .delete()
-              .eq('id', jadwal.id);
-            if (error) throw error;
-
-            addToast('success', 'Jadwal berhasil dihapus');
-            goToList();
-            setConfirmState((prev) => ({ ...prev, open: false, loading: false }));
-          } catch (err) {
-            console.error('Gagal menghapus jadwal:', err);
-            addToast('error', 'Gagal menghapus jadwal');
-            setConfirmState((prev) => ({ ...prev, loading: false }));
-          }
-        },
-      });
-    },
-    [addToast, goToList]
-  );
-
-  // ── Screenshot ─────────────────────────────────────────────
-  const handleScreenshot = useCallback(async () => {
-    if (!screenshotRef.current || !selectedJadwal) return;
-
+  async function handleDelete() {
+    if (!deleteTarget) return;
+    setDeleteLoading(true);
     try {
-      addToast('info', 'Membuat gambar jadwal...');
-
-      const canvas = await html2canvas(screenshotRef.current, {
-        scale: 2,
-        backgroundColor: '#ffffff',
-        useCORS: true,
-        logging: false,
-      });
-
-      const fileName = `Jadwal_${selectedJadwal.nama_jadwal.replace(/\s+/g, '_')}.png`;
-      canvas.toBlob(async (blob) => {
-        if (!blob) return;
-        const file = new File([blob], fileName, { type: 'image/png' });
-        if (navigator.share && navigator.canShare({ files: [file] })) {
-          await navigator.share({ files: [file], title: fileName });
-        } else {
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = fileName;
-          a.click();
-          URL.revokeObjectURL(url);
-        }
-      }, 'image/png');
-
-      addToast('success', 'Gambar jadwal berhasil dibuat');
-    } catch (err) {
-      console.error('Gagal membuat screenshot:', err);
-      addToast('error', 'Gagal membuat gambar jadwal');
+      const table = deleteTarget.type === 'ibadah' ? 'jadwal_ibadah' : 'jadwal_holy_morning';
+      const { error } = await supabase.from(table).delete().eq('id', deleteTarget.id);
+      if (error) throw error;
+      addToast('success', 'Data berhasil dihapus');
+      fetchData();
+    } catch {
+      addToast('error', 'Gagal menghapus data');
+    } finally {
+      setDeleteLoading(false);
+      setDeleteTarget(null);
     }
-  }, [selectedJadwal, addToast]);
+  }
 
-  const handleShare = useCallback(async () => {
-    if (!screenshotRef.current || !selectedJadwal) return;
+  /* ─── CRUD: Duplicate ─────────────────────────────────────────────────── */
 
+  async function handleDuplicate(row: IbadahRow | HolyMorningRow, type: TabType) {
     try {
-      const canvas = await html2canvas(screenshotRef.current, {
-        scale: 2,
-        backgroundColor: '#ffffff',
-        useCORS: true,
-        logging: false,
-      });
-
-      const fileName = `Jadwal_${selectedJadwal.nama_jadwal.replace(/\s+/g, '_')}.png`;
-      canvas.toBlob(async (blob) => {
-        if (!blob) return;
-        const file = new File([blob], fileName, { type: 'image/png' });
-        if (navigator.share && navigator.canShare({ files: [file] })) {
-          await navigator.share({ files: [file], title: fileName });
-        } else {
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = fileName;
-          a.click();
-          URL.revokeObjectURL(url);
-        }
-      }, 'image/png');
-    } catch (err) {
-      console.error('Gagal membagikan jadwal:', err);
-      addToast('error', 'Gagal membagikan jadwal');
-    }
-  }, [selectedJadwal, addToast]);
-
-  // ── Toggle accordion ───────────────────────────────────────
-  const toggleDayAccordion = useCallback((hari: string) => {
-    setExpandedDays((prev) => {
-      const next = new Set(prev);
-      if (next.has(hari)) {
-        next.delete(hari);
+      if (type === 'ibadah') {
+        const r = row as IbadahRow;
+        const { id: _id, created_at: _ca, updated_at: _ua, ...rest } = r;
+        const { error } = await supabase.from('jadwal_ibadah').insert([{ ...rest, tahun_ajaran: tahunAjaran }]);
+        if (error) throw error;
       } else {
-        next.add(hari);
+        const r = row as HolyMorningRow;
+        const { id: _id, created_at: _ca, updated_at: _ua, ...rest } = r;
+        const { error } = await supabase.from('jadwal_holy_morning').insert([{ ...rest, tahun_ajaran: tahunAjaran }]);
+        if (error) throw error;
       }
-      return next;
-    });
-  }, []);
+      addToast('success', 'Data berhasil diduplikasi');
+      fetchData();
+    } catch {
+      addToast('error', 'Gagal menduplikasi data');
+    }
+  }
 
-  // ── Build grid data for detail view ────────────────────────
-  const buildGridFromItems = useCallback(
-    (items: JadwalItem[]) => {
-      // Extract unique slots in order
-      const slotMap = new Map<string, SlotData>();
-      const slotOrder: string[] = [];
-      items.forEach((item) => {
-        const key = `${item.jam_mulai}|${item.jam_selesai}|${item.nama_slot}`;
-        if (!slotMap.has(key)) {
-          slotMap.set(key, {
-            jam_mulai: item.jam_mulai,
-            jam_selesai: item.jam_selesai,
-            nama_slot: item.nama_slot,
+  /* ─── CSV Import ──────────────────────────────────────────────────────── */
+
+  function resetImport() {
+    setCsvText('');
+    setCsvFile(null);
+    setParsedCsv([]);
+    setCsvHeaders([]);
+    setCsvErrors(0);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  }
+
+  function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setCsvFile(file);
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text = ev.target?.result as string;
+      setCsvText(text);
+      processCsvText(text);
+    };
+    reader.readAsText(file);
+  }
+
+  function processCsvText(text: string) {
+    if (!text.trim()) {
+      setParsedCsv([]);
+      setCsvHeaders([]);
+      setCsvErrors(0);
+      return;
+    }
+    const delimiter = detectDelimiter(text);
+    const rows = parseCSV(text, delimiter);
+    if (rows.length < 2) {
+      setParsedCsv([]);
+      setCsvHeaders([]);
+      setCsvErrors(0);
+      return;
+    }
+
+    const rawHeaders = rows[0];
+    const headerMap = activeTab === 'ibadah' ? IBADAH_HEADER_MAP : HM_HEADER_MAP;
+    const mapping = mapHeaders(rawHeaders, headerMap);
+
+    const mappedRows: Record<string, string>[] = [];
+    let errors = 0;
+
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i];
+      const record: Record<string, string> = {};
+      Object.entries(mapping).forEach(([colIdx, fieldName]) => {
+        record[fieldName] = row[parseInt(colIdx)] || '';
+      });
+      const requiredField = activeTab === 'ibadah' ? 'bulan' : 'bulan';
+      if (!record[requiredField]) {
+        errors++;
+      }
+      mappedRows.push(record);
+    }
+
+    setCsvHeaders(Object.values(mapping));
+    setParsedCsv(mappedRows);
+    setCsvErrors(errors);
+  }
+
+  function handleCsvTextChange(text: string) {
+    setCsvText(text);
+    setCsvFile(null);
+    processCsvText(text);
+  }
+
+  async function handleImport() {
+    if (parsedCsv.length === 0) return;
+    setImporting(true);
+    try {
+      const table = activeTab === 'ibadah' ? 'jadwal_ibadah' : 'jadwal_holy_morning';
+      const validRows = parsedCsv.filter((r) => r.bulan);
+      const payload = validRows.map((r) => ({ ...r, tahun_ajaran: tahunAjaran }));
+      const { error } = await supabase.from(table).insert(payload);
+      if (error) throw error;
+      addToast('success', `${payload.length} data berhasil diimpor`);
+      setShowImportModal(false);
+      resetImport();
+      fetchData();
+    } catch {
+      addToast('error', 'Gagal mengimpor data');
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  /* ─── Screenshot & Share ──────────────────────────────────────────────── */
+
+  async function handleScreenshot() {
+    if (!screenshotRef.current) return;
+    setScreenshotting(true);
+    try {
+      const canvas = await html2canvas(screenshotRef.current, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+      });
+      const blob = await new Promise<Blob | null>((resolve) =>
+        canvas.toBlob(resolve, 'image/png')
+      );
+      if (!blob) {
+        addToast('error', 'Gagal membuat screenshot');
+        return;
+      }
+      const file = new File([blob], `jadwal-${activeTab}-${tahunAjaran}.png`, { type: 'image/png' });
+
+      if (navigator.share && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({
+            title: activeTab === 'ibadah'
+              ? `Jadwal Ibadah — Tahun Ajar ${tahunAjaran}`
+              : `Holy Morning — Tahun Ajar ${tahunAjaran}`,
+            files: [file],
           });
-          slotOrder.push(key);
+        } catch {
+          downloadBlob(blob);
         }
-      });
+      } else {
+        downloadBlob(blob);
+      }
+      addToast('success', 'Screenshot berhasil dibuat');
+    } catch {
+      addToast('error', 'Gagal membuat screenshot');
+    } finally {
+      setScreenshotting(false);
+    }
+  }
 
-      const gridSlots = slotOrder.map((k) => slotMap.get(k)!);
+  function downloadBlob(blob: Blob) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `jadwal-${activeTab}-${tahunAjaran}.png`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 
-      // Build cells
-      const gridCells: Record<string, { mata_pelajaran: string; pengajar: string }> = {};
-      items.forEach((item) => {
-        const slotKey = `${item.jam_mulai}|${item.jam_selesai}|${item.nama_slot}`;
-        const slotIdx = slotOrder.indexOf(slotKey);
-        if (slotIdx >= 0) {
-          gridCells[getCellKey(slotIdx, item.hari)] = {
-            mata_pelajaran: item.mata_pelajaran || '',
-            pengajar: item.pengajar || '',
-          };
-        }
-      });
+  /* ─── Screenshot Table Data ───────────────────────────────────────────── */
 
-      // Determine active days
-      const days = Array.from(new Set(items.map((i) => i.hari)));
-      days.sort((a, b) => HARI_OPTIONS.indexOf(a) - HARI_OPTIONS.indexOf(b));
+  const screenshotData = activeTab === 'ibadah' ? filteredIbadah : filteredHM;
 
-      return { gridSlots, gridCells, days };
-    },
-    []
-  );
+  /* ─── Render ──────────────────────────────────────────────────────────── */
 
-  // ── LIST VIEW ──────────────────────────────────────────────
-  const renderListView = () => (
+  return (
     <div className="space-y-6">
+      {/* Page Header */}
       <PageHeader
-        title="Jadwal Pelajaran"
-        description="Kelola jadwal pelajaran kelas dan mata pelajaran"
+        title="Jadwal Ibadah & Holy Morning"
+        description="Kelola jadwal ibadah dan Holy Morning Sekolah Kristen Lentera"
         action={
-          <button
-            onClick={goToCreateForm}
-            className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors shadow-sm"
-          >
-            <Plus size={16} />
-            Tambah Jadwal Baru
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => { resetImport(); setShowImportModal(true); }}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition-colors"
+            >
+              <Upload size={16} />
+              <span className="hidden sm:inline">Import CSV</span>
+            </button>
+            <button
+              onClick={handleScreenshot}
+              disabled={screenshotting}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition-colors disabled:opacity-50"
+            >
+              {screenshotting ? <Loader2 size={16} className="animate-spin" /> : <Camera size={16} />}
+              <span className="hidden sm:inline">Screenshot</span>
+            </button>
+            <button
+              onClick={openAddModal}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors"
+            >
+              <Plus size={16} />
+              <span>Tambah</span>
+            </button>
+          </div>
         }
       />
 
-      <div className="bg-white rounded-xl border border-gray-200 p-4">
+      {/* Tabs */}
+      <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit">
+        <button
+          onClick={() => { setActiveTab('ibadah'); setFilterBulan(''); setSearch(''); }}
+          className={cn(
+            'px-4 py-2 text-sm font-medium rounded-md transition-all',
+            activeTab === 'ibadah'
+              ? 'bg-white text-indigo-700 shadow-sm'
+              : 'text-gray-500 hover:text-gray-700'
+          )}
+        >
+          Jadwal Ibadah
+        </button>
+        <button
+          onClick={() => { setActiveTab('holy_morning'); setFilterBulan(''); setSearch(''); }}
+          className={cn(
+            'px-4 py-2 text-sm font-medium rounded-md transition-all',
+            activeTab === 'holy_morning'
+              ? 'bg-white text-indigo-700 shadow-sm'
+              : 'text-gray-500 hover:text-gray-700'
+          )}
+        >
+          Holy Morning
+        </button>
+      </div>
+
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-3">
+        <FilterSelect
+          value={tahunAjaran}
+          onChange={setTahunAjaran}
+          options={tahunAjaranOptions}
+          placeholder="Tahun Ajaran"
+        />
+        <FilterSelect
+          value={filterBulan}
+          onChange={setFilterBulan}
+          options={BULAN_OPTIONS.map((b) => ({ value: b, label: b }))}
+          placeholder="Semua Bulan"
+        />
         <SearchBar
           value={search}
           onChange={setSearch}
-          placeholder="Cari nama jadwal..."
-          className="sm:w-72"
+          placeholder="Cari jadwal..."
+          className="flex-1 min-w-[200px]"
         />
       </div>
 
+      {/* Content */}
       {loading ? (
         <div className="flex items-center justify-center py-20">
           <Loader2 size={32} className="animate-spin text-indigo-500" />
         </div>
-      ) : filteredList.length === 0 ? (
-        <EmptyState
-          icon={<Calendar size={48} />}
-          title="Belum ada jadwal"
-          description="Buat jadwal pelajaran baru untuk mengatur jadwal kelas"
-          action={
-            <button
-              onClick={goToCreateForm}
-              className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors"
-            >
-              <Plus size={16} />
-              Tambah Jadwal Baru
-            </button>
-          }
-        />
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {filteredList.map((jadwal) => (
-            <div
-              key={jadwal.id}
-              onClick={() => goToDetail(jadwal)}
-              className="bg-white rounded-xl border border-gray-200 p-5 hover:shadow-md hover:border-indigo-300 transition-all cursor-pointer group"
-            >
-              <div className="flex items-start justify-between mb-3">
-                <div className="flex-1 min-w-0">
-                  <h3 className="text-base font-semibold text-gray-900 truncate group-hover:text-indigo-700 transition-colors">
-                    {jadwal.nama_jadwal}
-                  </h3>
-                </div>
-                <StatusBadge status={jadwal.status || 'Draft'} />
-              </div>
-
-              <div className="flex items-center gap-2 mb-3">
-                {jadwal.unit ? (
-                  <UnitBadge unitName={jadwal.unit.name} />
+        <>
+          {/* Desktop Table */}
+          <div ref={tableContainerRef} className="hidden md:block">
+            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              <div className="overflow-x-auto">
+                {activeTab === 'ibadah' ? (
+                  <IbadahTable
+                    data={filteredIbadah}
+                    onEdit={(row) => openEditModal(row, 'ibadah')}
+                    onDelete={(id) => setDeleteTarget({ id, type: 'ibadah' })}
+                    onDuplicate={(row) => handleDuplicate(row, 'ibadah')}
+                  />
                 ) : (
-                  <span className="text-xs text-gray-400">-</span>
+                  <HMTable
+                    data={filteredHM}
+                    onEdit={(row) => openEditModal(row, 'holy_morning')}
+                    onDelete={(id) => setDeleteTarget({ id, type: 'holy_morning' })}
+                    onDuplicate={(row) => handleDuplicate(row, 'holy_morning')}
+                  />
                 )}
               </div>
-
-              <div className="flex items-center gap-4 text-xs text-gray-500">
-                <span className="flex items-center gap-1">
-                  <Calendar size={12} />
-                  {jadwal.tahun_ajaran}
-                </span>
-                <span>Semester {jadwal.semester}</span>
-              </div>
-
-              {jadwal.keterangan && (
-                <p className="mt-2 text-xs text-gray-400 truncate">{jadwal.keterangan}</p>
-              )}
             </div>
-          ))}
-        </div>
+          </div>
+
+          {/* Mobile Cards */}
+          <div className="md:hidden space-y-3">
+            {activeTab === 'ibadah' ? (
+              filteredIbadah.length === 0 ? (
+                <EmptyCard />
+              ) : (
+                filteredIbadah.map((row) => (
+                  <IbadahCard
+                    key={row.id}
+                    row={row}
+                    onEdit={() => openEditModal(row, 'ibadah')}
+                    onDelete={() => setDeleteTarget({ id: row.id, type: 'ibadah' })}
+                    onDuplicate={() => handleDuplicate(row, 'ibadah')}
+                  />
+                ))
+              )
+            ) : filteredHM.length === 0 ? (
+              <EmptyCard />
+            ) : (
+              filteredHM.map((row) => (
+                <HMCard
+                  key={row.id}
+                  row={row}
+                  onEdit={() => openEditModal(row, 'holy_morning')}
+                  onDelete={() => setDeleteTarget({ id: row.id, type: 'holy_morning' })}
+                  onDuplicate={() => handleDuplicate(row, 'holy_morning')}
+                />
+              ))
+            )}
+          </div>
+
+          {/* Count */}
+          <div className="text-sm text-gray-500 text-center">
+            {activeTab === 'ibadah'
+              ? `${filteredIbadah.length} jadwal ibadah`
+              : `${filteredHM.length} jadwal Holy Morning`}
+          </div>
+        </>
       )}
-    </div>
-  );
 
-  // ── DETAIL VIEW ────────────────────────────────────────────
-  const renderDetailView = () => {
-    if (!selectedJadwal) return null;
-
-    const { gridSlots, gridCells, days } =
-      jadwalItems.length > 0
-        ? buildGridFromItems(jadwalItems)
-        : { gridSlots: [], gridCells: {}, days: [] };
-
-    const activeDaysForGrid = days.length > 0 ? days : activeDays;
-    const slotsForGrid = gridSlots.length > 0 ? gridSlots : slots;
-
-    return (
-      <div className="space-y-6">
-        {/* Detail Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={goToList}
-              className="p-2 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
-              title="Kembali"
-            >
-              <ArrowLeft size={20} />
-            </button>
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
-                Jadwal {selectedJadwal.nama_jadwal}
-                {selectedJadwal.unit && <UnitBadge unitName={selectedJadwal.unit.name} />}
-              </h1>
-              <p className="text-sm text-gray-500 mt-1">
-                {selectedJadwal.tahun_ajaran} &middot; Semester {selectedJadwal.semester}
-                {selectedJadwal.keterangan && ` · ${selectedJadwal.keterangan}`}
-              </p>
-            </div>
+      {/* Hidden Screenshot Container */}
+      <div
+        ref={screenshotRef}
+        style={{ position: 'fixed', left: '-9999px', top: 0, zIndex: -1 }}
+      >
+        <div className="bg-white p-6" style={{ width: '1200px' }}>
+          {/* Header */}
+          <div
+            className="p-6 rounded-t-xl mb-4"
+            style={{ background: 'linear-gradient(135deg, #4338ca 0%, #6366f1 100%)' }}
+          >
+            <h1 className="text-xl font-bold text-white">
+              {activeTab === 'ibadah'
+                ? `Jadwal Ibadah dan Pelayan dalam Ibadah Pegawai — Tahun Ajar ${tahunAjaran}`
+                : `Jadwal Pelayan Firman Holy Morning — Tahun Ajar ${tahunAjaran}`}
+            </h1>
+            <p className="text-indigo-200 text-sm mt-1">Sekolah Kristen Lentera</p>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleScreenshot}
-              className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-              title="Screenshot"
-            >
-              <Camera size={16} />
-              <span className="hidden sm:inline">Screenshot</span>
-            </button>
-            <button
-              onClick={handleShare}
-              className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-              title="Bagikan"
-            >
-              <Share2 size={16} />
-              <span className="hidden sm:inline">Bagikan</span>
-            </button>
-            <button
-              onClick={() => goToEditForm(selectedJadwal, jadwalItems)}
-              className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition-colors"
-            >
-              <Edit2 size={16} />
-              Edit
-            </button>
-            <button
-              onClick={() => handleDelete(selectedJadwal)}
-              className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors"
-            >
-              <Trash2 size={16} />
-              Hapus
-            </button>
+          {/* Table */}
+          <table className="w-full text-xs border-collapse">
+            <thead>
+              <tr className="bg-indigo-50">
+                {activeTab === 'ibadah' ? (
+                  <>
+                    <th className="px-3 py-2 text-left font-semibold text-indigo-800 border border-indigo-200">NO</th>
+                    <th className="px-3 py-2 text-left font-semibold text-indigo-800 border border-indigo-200">BULAN</th>
+                    <th className="px-3 py-2 text-left font-semibold text-indigo-800 border border-indigo-200">TANGGAL</th>
+                    <th className="px-3 py-2 text-left font-semibold text-indigo-800 border border-indigo-200">PELAYAN IBADAH</th>
+                    <th className="px-3 py-2 text-left font-semibold text-indigo-800 border border-indigo-200">PEMBERITA FIRMAN</th>
+                    <th className="px-3 py-2 text-left font-semibold text-indigo-800 border border-indigo-200">TEMA IBADAH BULANAN</th>
+                    <th className="px-3 py-2 text-left font-semibold text-indigo-800 border border-indigo-200">NAS ALKITAB</th>
+                  </>
+                ) : (
+                  <>
+                    <th className="px-2 py-2 text-left font-semibold text-indigo-800 border border-indigo-200">NO</th>
+                    <th className="px-2 py-2 text-left font-semibold text-indigo-800 border border-indigo-200">BULAN</th>
+                    <th className="px-2 py-2 text-left font-semibold text-indigo-800 border border-indigo-200">TANGGAL</th>
+                    <th className="px-2 py-2 text-left font-semibold text-indigo-800 border border-indigo-200">CHRISTIAN WORLDVIEW</th>
+                    <th className="px-2 py-2 text-left font-semibold text-indigo-800 border border-indigo-200">PROFIL</th>
+                    <th className="px-2 py-2 text-left font-semibold text-indigo-800 border border-indigo-200">BESTRA</th>
+                    <th className="px-2 py-2 text-left font-semibold text-indigo-800 border border-indigo-200">KARAKTER</th>
+                    <th className="px-2 py-2 text-left font-semibold text-indigo-800 border border-indigo-200">TEMA BULANAN</th>
+                    <th className="px-2 py-2 text-left font-semibold text-indigo-800 border border-indigo-200">TEMA MINGGUAN</th>
+                    <th className="px-2 py-2 text-left font-semibold text-indigo-800 border border-indigo-200">NAS ALKITAB</th>
+                    <th className="px-2 py-2 text-left font-semibold text-indigo-800 border border-indigo-200">TUJUAN</th>
+                    <th className="px-2 py-2 text-left font-semibold text-indigo-800 border border-indigo-200">PELAYAN HOLY MORNING</th>
+                    <th className="px-2 py-2 text-left font-semibold text-indigo-800 border border-indigo-200">KETERANGAN</th>
+                  </>
+                )}
+              </tr>
+            </thead>
+            <tbody>
+              {activeTab === 'ibadah'
+                ? (screenshotData as IbadahRow[]).map((row, i) => (
+                    <tr key={row.id} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                      <td className="px-3 py-1.5 border border-gray-200">{i + 1}</td>
+                      <td className="px-3 py-1.5 border border-gray-200 font-medium">{row.bulan}</td>
+                      <td className="px-3 py-1.5 border border-gray-200">{row.tanggal}</td>
+                      <td className="px-3 py-1.5 border border-gray-200">{row.pelayan_ibadah}</td>
+                      <td className="px-3 py-1.5 border border-gray-200">{row.pemberita_firman}</td>
+                      <td className="px-3 py-1.5 border border-gray-200">{row.tema_ibadah_bulanan}</td>
+                      <td className="px-3 py-1.5 border border-gray-200">{row.nas_alkitab}</td>
+                    </tr>
+                  ))
+                : (screenshotData as HolyMorningRow[]).map((row, i) => (
+                    <tr key={row.id} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                      <td className="px-2 py-1.5 border border-gray-200">{i + 1}</td>
+                      <td className="px-2 py-1.5 border border-gray-200 font-medium">{row.bulan}</td>
+                      <td className="px-2 py-1.5 border border-gray-200">{row.tanggal}</td>
+                      <td className="px-2 py-1.5 border border-gray-200">{row.christian_worldview}</td>
+                      <td className="px-2 py-1.5 border border-gray-200">{row.profil}</td>
+                      <td className="px-2 py-1.5 border border-gray-200">{row.bestra}</td>
+                      <td className="px-2 py-1.5 border border-gray-200">{row.karakter}</td>
+                      <td className="px-2 py-1.5 border border-gray-200">{row.tema_bulanan}</td>
+                      <td className="px-2 py-1.5 border border-gray-200">{row.tema_mingguan}</td>
+                      <td className="px-2 py-1.5 border border-gray-200">{row.nas_alkitab}</td>
+                      <td className="px-2 py-1.5 border border-gray-200">{row.tujuan}</td>
+                      <td className="px-2 py-1.5 border border-gray-200">{row.pelayan_holy_morning}</td>
+                      <td className="px-2 py-1.5 border border-gray-200">{row.keterangan}</td>
+                    </tr>
+                  ))}
+            </tbody>
+          </table>
+          <div className="mt-3 text-xs text-gray-400 text-right">
+            Sekolah Kristen Lentera &middot; Dicetak {new Date().toLocaleDateString('id-ID')}
           </div>
         </div>
+      </div>
 
-        {loadingDetail ? (
-          <div className="flex items-center justify-center py-20">
-            <Loader2 size={32} className="animate-spin text-indigo-500" />
-          </div>
-        ) : jadwalItems.length === 0 ? (
-          <EmptyState
-            icon={<Clock size={48} />}
-            title="Jadwal kosong"
-            description="Belum ada slot jadwal. Edit jadwal ini untuk menambahkan slot."
-            action={
-              <button
-                onClick={() => goToEditForm(selectedJadwal, jadwalItems)}
-                className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors"
-              >
-                <Edit2 size={16} />
-                Edit Jadwal
-              </button>
-            }
+      {/* ─── Add / Edit Modal ──────────────────────────────────────────── */}
+      <Modal
+        open={showFormModal}
+        onClose={() => setShowFormModal(false)}
+        title={
+          activeTab === 'ibadah'
+            ? (editingIbadah ? 'Edit Jadwal Ibadah' : 'Tambah Jadwal Ibadah')
+            : (editingHM ? 'Edit Jadwal Holy Morning' : 'Tambah Jadwal Holy Morning')
+        }
+        size="xl"
+      >
+        {activeTab === 'ibadah' ? (
+          <IbadahFormContent
+            form={ibadahForm}
+            onChange={setIbadahForm}
+            onSave={handleSave}
+            onCancel={() => setShowFormModal(false)}
+            saving={saving}
+            isEdit={!!editingIbadah}
           />
         ) : (
-          <>
-            {/* Desktop: Full Grid Table */}
-            <div className="hidden md:block">
-              <div ref={screenshotRef} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                {/* Screenshot Header (visible only in capture) */}
-                <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-indigo-600 to-blue-600 text-white">
-                  <div className="text-center">
-                    <p className="text-xs font-medium opacity-80 tracking-wider uppercase">Jadwal Pelajaran</p>
-                    <h2 className="text-lg font-bold mt-1">{selectedJadwal.nama_jadwal}</h2>
-                    <p className="text-xs opacity-80 mt-1">
-                      {selectedJadwal.tahun_ajaran} &middot; Semester {selectedJadwal.semester}
-                      {selectedJadwal.unit && ` · ${selectedJadwal.unit.name}`}
-                    </p>
-                  </div>
-                </div>
+          <HMFormContent
+            form={hmForm}
+            onChange={setHmForm}
+            onSave={handleSave}
+            onCancel={() => setShowFormModal(false)}
+            saving={saving}
+            isEdit={!!editingHM}
+          />
+        )}
+      </Modal>
 
-                <div ref={gridRef} className="overflow-x-auto">
-                  <table className="w-full border-collapse">
-                    <thead>
-                      <tr>
-                        <th className="sticky left-0 z-10 bg-gray-50 border-b border-r border-gray-200 px-3 py-3 text-xs font-semibold text-gray-600 min-w-[140px]">
-                          Waktu
-                        </th>
-                        {activeDaysForGrid.map((hari) => (
-                          <th
-                            key={hari}
-                            className={cn(
-                              'border-b border-r border-gray-200 px-3 py-3 text-sm font-semibold text-white text-center min-w-[140px] last:border-r-0',
-                              HARI_BG_COLORS[hari] || 'bg-indigo-600'
-                            )}
-                          >
-                            {HARI_HEADER_TEXT[hari] || hari}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {slotsForGrid.map((slot, slotIdx) => {
-                        const isBreak = isIstirahat(slot);
-                        return (
-                          <tr key={slotIdx} className={cn(isBreak && 'bg-gray-50')}>
-                            <td className="sticky left-0 z-10 bg-white border-b border-r border-gray-200 px-3 py-2.5">
-                              <div className={cn('text-xs', isBreak ? 'text-gray-400 italic' : 'font-medium text-gray-700')}>
-                                {slot.nama_slot}
-                              </div>
-                              <div className="text-xs text-gray-400 mt-0.5">
-                                {slot.jam_mulai} - {slot.jam_selesai}
-                              </div>
-                            </td>
-                            {activeDaysForGrid.map((hari) => {
-                              const key = getCellKey(slotIdx, hari);
-                              const cell = gridCells[key];
-                              const hasContent = cell?.mata_pelajaran;
+      {/* ─── Delete Confirm ────────────────────────────────────────────── */}
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleDelete}
+        title="Hapus Data"
+        message="Apakah Anda yakin ingin menghapus data ini? Tindakan ini tidak dapat dibatalkan."
+        confirmText="Hapus"
+        loading={deleteLoading}
+      />
 
-                              if (isBreak) {
-                                return (
-                                  <td
-                                    key={hari}
-                                    className="border-b border-r border-gray-200 px-3 py-2.5 text-center last:border-r-0"
-                                  >
-                                    <span className="text-xs text-gray-300 italic">Istirahat</span>
-                                  </td>
-                                );
-                              }
-
-                              return (
-                                <td
-                                  key={hari}
-                                  className="border-b border-r border-gray-200 px-3 py-2.5 last:border-r-0"
-                                >
-                                  {hasContent ? (
-                                    <div className="bg-indigo-50 rounded-lg p-2 min-h-[48px]">
-                                      <p className="text-sm font-semibold text-indigo-800 leading-tight">
-                                        {cell.mata_pelajaran}
-                                      </p>
-                                      {cell.pengajar && (
-                                        <p className="text-xs text-indigo-500 mt-0.5">{cell.pengajar}</p>
-                                      )}
-                                    </div>
-                                  ) : (
-                                    <div className="min-h-[48px]" />
-                                  )}
-                                </td>
-                              );
-                            })}
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-
-                {selectedJadwal.catatan && (
-                  <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
-                    <p className="text-xs font-semibold text-gray-600 mb-1">Catatan:</p>
-                    <p className="text-sm text-gray-700 whitespace-pre-wrap">{selectedJadwal.catatan}</p>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Mobile: Day Accordion */}
-            <div className="md:hidden space-y-3">
-              {/* Screenshot capture div (off-screen for mobile) */}
-              <div className="absolute -left-[9999px] top-0" style={{ width: '900px' }}>
-                <div ref={screenshotRef} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                  <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-indigo-600 to-blue-600 text-white">
-                    <div className="text-center">
-                      <p className="text-xs font-medium opacity-80 tracking-wider uppercase">Jadwal Pelajaran</p>
-                      <h2 className="text-lg font-bold mt-1">{selectedJadwal.nama_jadwal}</h2>
-                      <p className="text-xs opacity-80 mt-1">
-                        {selectedJadwal.tahun_ajaran} &middot; Semester {selectedJadwal.semester}
-                        {selectedJadwal.unit && ` · ${selectedJadwal.unit.name}`}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full border-collapse">
-                      <thead>
-                        <tr>
-                          <th className="bg-gray-50 border-b border-r border-gray-200 px-3 py-3 text-xs font-semibold text-gray-600 min-w-[140px]">
-                            Waktu
-                          </th>
-                          {activeDaysForGrid.map((hari) => (
-                            <th
-                              key={hari}
-                              className={cn(
-                                'border-b border-r border-gray-200 px-3 py-3 text-sm font-semibold text-white text-center min-w-[140px] last:border-r-0',
-                                HARI_BG_COLORS[hari] || 'bg-indigo-600'
-                              )}
-                            >
-                              {hari}
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {slotsForGrid.map((slot, slotIdx) => {
-                          const isBreak = isIstirahat(slot);
-                          return (
-                            <tr key={slotIdx} className={cn(isBreak && 'bg-gray-50')}>
-                              <td className="bg-white border-b border-r border-gray-200 px-3 py-2.5">
-                                <div className={cn('text-xs', isBreak ? 'text-gray-400 italic' : 'font-medium text-gray-700')}>
-                                  {slot.nama_slot}
-                                </div>
-                                <div className="text-xs text-gray-400 mt-0.5">
-                                  {slot.jam_mulai} - {slot.jam_selesai}
-                                </div>
-                              </td>
-                              {activeDaysForGrid.map((hari) => {
-                                const key = getCellKey(slotIdx, hari);
-                                const cell = gridCells[key];
-                                const hasContent = cell?.mata_pelajaran;
-                                if (isBreak) {
-                                  return (
-                                    <td key={hari} className="border-b border-r border-gray-200 px-3 py-2.5 text-center last:border-r-0">
-                                      <span className="text-xs text-gray-300 italic">Istirahat</span>
-                                    </td>
-                                  );
-                                }
-                                return (
-                                  <td key={hari} className="border-b border-r border-gray-200 px-3 py-2.5 last:border-r-0">
-                                    {hasContent ? (
-                                      <div className="bg-indigo-50 rounded-lg p-2 min-h-[48px]">
-                                        <p className="text-sm font-semibold text-indigo-800">{cell.mata_pelajaran}</p>
-                                        {cell.pengajar && <p className="text-xs text-indigo-500 mt-0.5">{cell.pengajar}</p>}
-                                      </div>
-                                    ) : (
-                                      <div className="min-h-[48px]" />
-                                    )}
-                                  </td>
-                                );
-                              })}
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
-
-              {activeDaysForGrid.map((hari) => (
-                <div key={hari} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                  <button
-                    onClick={() => toggleDayAccordion(hari)}
-                    className={cn(
-                      'w-full flex items-center justify-between px-4 py-3 text-sm font-semibold text-white transition-colors',
-                      HARI_BG_COLORS[hari] || 'bg-indigo-600'
-                    )}
-                  >
-                    <span>{hari}</span>
-                    {expandedDays.has(hari) ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                  </button>
-                  {expandedDays.has(hari) && (
-                    <div className="divide-y divide-gray-100">
-                      {slotsForGrid.map((slot, slotIdx) => {
-                        const key = getCellKey(slotIdx, hari);
-                        const cell = gridCells[key];
-                        const isBreak = isIstirahat(slot);
-
-                        if (isBreak) {
-                          return (
-                            <div key={slotIdx} className="px-4 py-2 bg-gray-50">
-                              <span className="text-xs text-gray-400 italic">{slot.nama_slot}</span>
-                              <span className="text-xs text-gray-300 ml-2">
-                                {slot.jam_mulai} - {slot.jam_selesai}
-                              </span>
-                            </div>
-                          );
-                        }
-
-                        return (
-                          <div key={slotIdx} className="px-4 py-3">
-                            <div className="flex items-baseline justify-between mb-1">
-                              <span className="text-xs font-medium text-gray-500">{slot.nama_slot}</span>
-                              <span className="text-xs text-gray-400">
-                                {slot.jam_mulai} - {slot.jam_selesai}
-                              </span>
-                            </div>
-                            {cell?.mata_pelajaran ? (
-                              <div className="bg-indigo-50 rounded-lg p-2.5">
-                                <p className="text-sm font-semibold text-indigo-800">{cell.mata_pelajaran}</p>
-                                {cell.pengajar && <p className="text-xs text-indigo-500 mt-0.5">{cell.pengajar}</p>}
-                              </div>
-                            ) : (
-                              <p className="text-xs text-gray-300 italic">-</p>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              ))}
-
-              {selectedJadwal.catatan && (
-                <div className="bg-white rounded-xl border border-gray-200 p-4">
-                  <p className="text-xs font-semibold text-gray-600 mb-1">Catatan:</p>
-                  <p className="text-sm text-gray-700 whitespace-pre-wrap">{selectedJadwal.catatan}</p>
-                </div>
+      {/* ─── Import CSV Modal ──────────────────────────────────────────── */}
+      <Modal
+        open={showImportModal}
+        onClose={() => { setShowImportModal(false); resetImport(); }}
+        title={`Import CSV — ${activeTab === 'ibadah' ? 'Jadwal Ibadah' : 'Holy Morning'}`}
+        size="xl"
+      >
+        <div className="space-y-4">
+          {/* File Upload */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Upload File CSV
+            </label>
+            <div className="flex items-center gap-3">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".csv,.tsv,.txt"
+                onChange={handleFileUpload}
+                className="hidden"
+              />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100"
+              >
+                <FileSpreadsheet size={16} />
+                Pilih File
+              </button>
+              {csvFile && (
+                <span className="text-sm text-gray-500">{csvFile.name}</span>
               )}
             </div>
-          </>
-        )}
-      </div>
-    );
-  };
+          </div>
 
-  // ── FORM VIEW ──────────────────────────────────────────────
-  const renderFormView = () => (
-    <div className="space-y-6">
-      {/* Form Header */}
-      <div className="flex items-center gap-3">
-        <button
-          onClick={goToList}
-          className="p-2 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
-          title="Kembali"
-        >
-          <ArrowLeft size={20} />
-        </button>
-        <h1 className="text-2xl font-bold text-gray-900">
-          {editingJadwal ? 'Edit Jadwal' : 'Tambah Jadwal Baru'}
-        </h1>
-      </div>
-
-      {/* Basic Info */}
-      <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-5">
-        <h2 className="text-base font-semibold text-gray-900">Informasi Jadwal</h2>
-
-        <Input
-          label="Nama Jadwal *"
-          value={formData.nama_jadwal}
-          onChange={(e) => handleFormChange('nama_jadwal', e.target.value)}
-          placeholder="Contoh: Jadwal Kelas 3A Semester 1"
-        />
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Select
-            label="Unit *"
-            value={formData.unit_id}
-            onChange={(e) => handleFormChange('unit_id', e.target.value)}
-            options={unitOptions}
-            placeholder="Pilih unit..."
+          {/* Textarea */}
+          <Textarea
+            label="Atau tempel CSV di sini"
+            value={csvText}
+            onChange={(e) => handleCsvTextChange(e.target.value)}
+            placeholder="BULAN,TANGGAL,PELAYAN IBADAH,...&#10;JULI,12 Juli 2026 HUT SKL,GKI dan SKL,..."
+            rows={6}
           />
-          <Select
-            label="Status"
-            value={formData.status}
-            onChange={(e) => handleFormChange('status', e.target.value)}
-            options={STATUS_OPTIONS}
-          />
-        </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Select
-            label="Tahun Ajaran *"
-            value={formData.tahun_ajaran}
-            onChange={(e) => handleFormChange('tahun_ajaran', e.target.value)}
-            options={TAHUN_AJARAN_OPTIONS}
-          />
-          <Select
-            label="Semester *"
-            value={formData.semester}
-            onChange={(e) => handleFormChange('semester', e.target.value)}
-            options={SEMESTER_OPTIONS}
-          />
-        </div>
-
-        <Input
-          label="Keterangan"
-          value={formData.keterangan}
-          onChange={(e) => handleFormChange('keterangan', e.target.value)}
-          placeholder="Deskripsi singkat jadwal"
-        />
-
-        <Textarea
-          label="Catatan"
-          value={formData.catatan}
-          onChange={(e) => handleFormChange('catatan', e.target.value)}
-          placeholder="Catatan tambahan..."
-          rows={2}
-        />
-      </div>
-
-      {/* Day Selection */}
-      <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
-        <h2 className="text-base font-semibold text-gray-900">Hari Aktif</h2>
-        <div className="flex flex-wrap gap-2">
-          {HARI_OPTIONS.map((hari) => {
-            const isActive = activeDays.includes(hari);
-            return (
-              <button
-                key={hari}
-                onClick={() => toggleDay(hari)}
-                className={cn(
-                  'px-4 py-2 text-sm font-medium rounded-lg border transition-colors',
-                  isActive
-                    ? cn('text-white', HARI_BG_COLORS[hari] || 'bg-indigo-600', 'border-transparent')
-                    : 'text-gray-500 bg-white border-gray-300 hover:bg-gray-50'
-                )}
-              >
-                {hari}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Time Slots Editor */}
-      <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-base font-semibold text-gray-900">Slot Waktu</h2>
-          <button
-            onClick={addSlot}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition-colors"
-          >
-            <Plus size={14} />
-            Tambah Slot
-          </button>
-        </div>
-
-        <div className="space-y-3">
-          {slots.map((slot, idx) => {
-            const isBreak = isIstirahat(slot);
-            return (
-              <div
-                key={idx}
-                className={cn(
-                  'flex items-center gap-3 p-3 rounded-lg border',
-                  isBreak ? 'bg-gray-50 border-gray-200' : 'bg-white border-gray-200'
-                )}
-              >
-                <div className="text-gray-300">
-                  <GripVertical size={16} />
+          {/* Preview */}
+          {parsedCsv.length > 0 && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-gray-700">
+                  Preview ({parsedCsv.length} baris)
+                </h3>
+                <div className="flex items-center gap-3 text-xs">
+                  <span className="text-green-600">
+                    ✓ {parsedCsv.length - csvErrors} valid
+                  </span>
+                  {csvErrors > 0 && (
+                    <span className="text-red-600">✗ {csvErrors} tidak valid</span>
+                  )}
                 </div>
-                <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  <input
-                    type="text"
-                    value={slot.nama_slot}
-                    onChange={(e) => updateSlot(idx, 'nama_slot', e.target.value)}
-                    placeholder="Nama slot"
-                    className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                  />
-                  <input
-                    type="time"
-                    value={slot.jam_mulai}
-                    onChange={(e) => updateSlot(idx, 'jam_mulai', e.target.value)}
-                    className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                  />
-                  <input
-                    type="time"
-                    value={slot.jam_selesai}
-                    onChange={(e) => updateSlot(idx, 'jam_selesai', e.target.value)}
-                    className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                  />
-                </div>
-                <button
-                  onClick={() => removeSlot(idx)}
-                  className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors flex-shrink-0"
-                  title="Hapus slot"
-                >
-                  <X size={16} />
-                </button>
               </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Schedule Grid Editor */}
-      {activeDays.length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
-          <h2 className="text-base font-semibold text-gray-900">Isi Jadwal</h2>
-          <p className="text-sm text-gray-500">Isi mata pelajaran dan pengajar untuk setiap slot waktu.</p>
-
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse">
-              <thead>
-                <tr>
-                  <th className="bg-gray-50 border border-gray-200 px-3 py-2.5 text-xs font-semibold text-gray-600 text-left min-w-[120px] sticky left-0 z-10">
-                    Slot
-                  </th>
-                  {activeDays.map((hari) => (
-                    <th
-                      key={hari}
-                      className={cn(
-                        'border border-gray-200 px-2 py-2.5 text-xs font-semibold text-white text-center min-w-[140px]',
-                        HARI_BG_COLORS[hari] || 'bg-indigo-600'
-                      )}
-                    >
-                      {hari}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {slots.map((slot, slotIdx) => {
-                  const isBreak = isIstirahat(slot);
-                  return (
-                    <tr key={slotIdx} className={cn(isBreak && 'bg-gray-50')}>
-                      <td className="sticky left-0 z-10 bg-white border border-gray-200 px-3 py-2">
-                        <div className={cn('text-xs font-medium', isBreak ? 'text-gray-400 italic' : 'text-gray-700')}>
-                          {slot.nama_slot || `Slot ${slotIdx + 1}`}
-                        </div>
-                        <div className="text-xs text-gray-400 mt-0.5">
-                          {slot.jam_mulai} - {slot.jam_selesai}
-                        </div>
-                      </td>
-                      {activeDays.map((hari) => {
-                        const key = getCellKey(slotIdx, hari);
-                        const cell = cellValues[key];
-
-                        if (isBreak) {
-                          return (
-                            <td
-                              key={hari}
-                              className="border border-gray-200 px-2 py-2 text-center"
-                            >
-                              <span className="text-xs text-gray-300 italic">Istirahat</span>
-                            </td>
-                          );
-                        }
-
-                        return (
-                          <td key={hari} className="border border-gray-200 px-1.5 py-1.5 align-top">
-                            <div className="space-y-1">
-                              <input
-                                type="text"
-                                value={cell?.mata_pelajaran || ''}
-                                onChange={(e) => updateCell(slotIdx, hari, 'mata_pelajaran', e.target.value)}
-                                placeholder="Mapel"
-                                className="w-full px-2 py-1.5 text-xs border-0 bg-indigo-50 rounded focus:outline-none focus:ring-2 focus:ring-indigo-400 placeholder:text-indigo-300"
-                              />
-                              <input
-                                type="text"
-                                value={cell?.pengajar || ''}
-                                onChange={(e) => updateCell(slotIdx, hari, 'pengajar', e.target.value)}
-                                placeholder="Pengajar"
-                                className="w-full px-2 py-1 text-xs border-0 bg-gray-50 rounded focus:outline-none focus:ring-2 focus:ring-indigo-400 placeholder:text-gray-300"
-                              />
-                            </div>
-                          </td>
-                        );
-                      })}
+              <div className="max-h-48 overflow-auto border border-gray-200 rounded-lg">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="bg-gray-50 sticky top-0">
+                      {csvHeaders.map((h) => (
+                        <th key={h} className="px-3 py-2 text-left font-medium text-gray-600 border-b border-gray-200">
+                          {h}
+                        </th>
+                      ))}
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                  </thead>
+                  <tbody>
+                    {parsedCsv.slice(0, 50).map((row, i) => (
+                      <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                        {csvHeaders.map((h) => (
+                          <td key={h} className="px-3 py-1.5 border-b border-gray-100 text-gray-700">
+                            {row[h] || ''}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {parsedCsv.length > 50 && (
+                  <div className="text-center py-2 text-xs text-gray-400">
+                    ... dan {parsedCsv.length - 50} baris lagi
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Actions */}
+          <div className="flex justify-end gap-3 pt-2">
+            <button
+              onClick={() => { setShowImportModal(false); resetImport(); }}
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+            >
+              Batal
+            </button>
+            <button
+              onClick={handleImport}
+              disabled={parsedCsv.length === 0 || csvErrors === parsedCsv.length || importing}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {importing ? (
+                <Loader2 size={16} className="animate-spin" />
+              ) : (
+                <Upload size={16} />
+              )}
+              Import {parsedCsv.length > 0 && `(${parsedCsv.length - csvErrors} baris)`}
+            </button>
           </div>
         </div>
-      )}
+      </Modal>
+    </div>
+  );
+}
 
-      {/* Form Actions */}
-      <div className="flex justify-end gap-3 pt-2 pb-6">
+/* ─── Sub-Components: Tables ─────────────────────────────────────────────── */
+
+function IbadahTable({
+  data,
+  onEdit,
+  onDelete,
+  onDuplicate,
+}: {
+  data: IbadahRow[];
+  onEdit: (row: IbadahRow) => void;
+  onDelete: (id: string) => void;
+  onDuplicate: (row: IbadahRow) => void;
+}) {
+  if (data.length === 0) {
+    return (
+      <div className="py-16 text-center text-gray-400">
+        <FileSpreadsheet size={40} className="mx-auto mb-3 opacity-40" />
+        <p className="text-sm">Belum ada data jadwal ibadah</p>
+      </div>
+    );
+  }
+
+  return (
+    <table className="w-full text-sm">
+      <thead>
+        <tr className="bg-indigo-50/80">
+          <th className="px-4 py-3 text-left font-semibold text-indigo-800 text-xs uppercase tracking-wider">No</th>
+          <th className="px-4 py-3 text-left font-semibold text-indigo-800 text-xs uppercase tracking-wider">Bulan</th>
+          <th className="px-4 py-3 text-left font-semibold text-indigo-800 text-xs uppercase tracking-wider">Tanggal</th>
+          <th className="px-4 py-3 text-left font-semibold text-indigo-800 text-xs uppercase tracking-wider">Pelayan Ibadah</th>
+          <th className="px-4 py-3 text-left font-semibold text-indigo-800 text-xs uppercase tracking-wider">Pemberita Firman</th>
+          <th className="px-4 py-3 text-left font-semibold text-indigo-800 text-xs uppercase tracking-wider">Tema Ibadah Bulanan</th>
+          <th className="px-4 py-3 text-left font-semibold text-indigo-800 text-xs uppercase tracking-wider">Nas Alkitab</th>
+          <th className="px-4 py-3 text-right font-semibold text-indigo-800 text-xs uppercase tracking-wider w-24">Aksi</th>
+        </tr>
+      </thead>
+      <tbody className="divide-y divide-gray-100">
+        {data.map((row, i) => (
+          <tr key={row.id} className={cn('hover:bg-indigo-50/50 transition-colors', i % 2 === 1 && 'bg-gray-50/50')}>
+            <td className="px-4 py-3 text-gray-500">{i + 1}</td>
+            <td className="px-4 py-3 font-medium text-gray-900">{row.bulan}</td>
+            <td className="px-4 py-3 text-gray-700">{row.tanggal}</td>
+            <td className="px-4 py-3 text-gray-700">{row.pelayan_ibadah}</td>
+            <td className="px-4 py-3 text-gray-700">{row.pemberita_firman}</td>
+            <td className="px-4 py-3 text-gray-700">{row.tema_ibadah_bulanan}</td>
+            <td className="px-4 py-3 text-gray-700">{row.nas_alkitab}</td>
+            <td className="px-4 py-3">
+              <div className="flex items-center justify-end gap-1">
+                <button onClick={() => onEdit(row)} className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Edit">
+                  <Edit2 size={14} />
+                </button>
+                <button onClick={() => onDuplicate(row)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Duplikasi">
+                  <Copy size={14} />
+                </button>
+                <button onClick={() => onDelete(row.id)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Hapus">
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+function HMTable({
+  data,
+  onEdit,
+  onDelete,
+  onDuplicate,
+}: {
+  data: HolyMorningRow[];
+  onEdit: (row: HolyMorningRow) => void;
+  onDelete: (id: string) => void;
+  onDuplicate: (row: HolyMorningRow) => void;
+}) {
+  if (data.length === 0) {
+    return (
+      <div className="py-16 text-center text-gray-400">
+        <FileSpreadsheet size={40} className="mx-auto mb-3 opacity-40" />
+        <p className="text-sm">Belum ada data jadwal Holy Morning</p>
+      </div>
+    );
+  }
+
+  return (
+    <table className="w-full text-sm">
+      <thead>
+        <tr className="bg-indigo-50/80">
+          <th className="px-3 py-3 text-left font-semibold text-indigo-800 text-xs uppercase tracking-wider">No</th>
+          <th className="px-3 py-3 text-left font-semibold text-indigo-800 text-xs uppercase tracking-wider">Bulan</th>
+          <th className="px-3 py-3 text-left font-semibold text-indigo-800 text-xs uppercase tracking-wider">Tanggal</th>
+          <th className="px-3 py-3 text-left font-semibold text-indigo-800 text-xs uppercase tracking-wider">Christian Worldview</th>
+          <th className="px-3 py-3 text-left font-semibold text-indigo-800 text-xs uppercase tracking-wider">Profil</th>
+          <th className="px-3 py-3 text-left font-semibold text-indigo-800 text-xs uppercase tracking-wider">Bestra</th>
+          <th className="px-3 py-3 text-left font-semibold text-indigo-800 text-xs uppercase tracking-wider">Karakter</th>
+          <th className="px-3 py-3 text-left font-semibold text-indigo-800 text-xs uppercase tracking-wider">Tema Bulanan</th>
+          <th className="px-3 py-3 text-left font-semibold text-indigo-800 text-xs uppercase tracking-wider">Tema Mingguan</th>
+          <th className="px-3 py-3 text-left font-semibold text-indigo-800 text-xs uppercase tracking-wider">Nas Alkitab</th>
+          <th className="px-3 py-3 text-left font-semibold text-indigo-800 text-xs uppercase tracking-wider">Tujuan</th>
+          <th className="px-3 py-3 text-left font-semibold text-indigo-800 text-xs uppercase tracking-wider">Pelayan Holy Morning</th>
+          <th className="px-3 py-3 text-left font-semibold text-indigo-800 text-xs uppercase tracking-wider">Keterangan</th>
+          <th className="px-3 py-3 text-right font-semibold text-indigo-800 text-xs uppercase tracking-wider w-24">Aksi</th>
+        </tr>
+      </thead>
+      <tbody className="divide-y divide-gray-100">
+        {data.map((row, i) => (
+          <tr key={row.id} className={cn('hover:bg-indigo-50/50 transition-colors', i % 2 === 1 && 'bg-gray-50/50')}>
+            <td className="px-3 py-3 text-gray-500">{i + 1}</td>
+            <td className="px-3 py-3 font-medium text-gray-900">{row.bulan}</td>
+            <td className="px-3 py-3 text-gray-700">{row.tanggal}</td>
+            <td className="px-3 py-3 text-gray-700">{row.christian_worldview}</td>
+            <td className="px-3 py-3 text-gray-700">{row.profil}</td>
+            <td className="px-3 py-3 text-gray-700">{row.bestra}</td>
+            <td className="px-3 py-3 text-gray-700">{row.karakter}</td>
+            <td className="px-3 py-3 text-gray-700">{row.tema_bulanan}</td>
+            <td className="px-3 py-3 text-gray-700">{row.tema_mingguan}</td>
+            <td className="px-3 py-3 text-gray-700">{row.nas_alkitab}</td>
+            <td className="px-3 py-3 text-gray-700">{row.tujuan}</td>
+            <td className="px-3 py-3 text-gray-700">{row.pelayan_holy_morning}</td>
+            <td className="px-3 py-3 text-gray-700">{row.keterangan}</td>
+            <td className="px-3 py-3">
+              <div className="flex items-center justify-end gap-1">
+                <button onClick={() => onEdit(row)} className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Edit">
+                  <Edit2 size={14} />
+                </button>
+                <button onClick={() => onDuplicate(row)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Duplikasi">
+                  <Copy size={14} />
+                </button>
+                <button onClick={() => onDelete(row.id)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Hapus">
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+/* ─── Sub-Components: Mobile Cards ───────────────────────────────────────── */
+
+function IbadahCard({
+  row,
+  onEdit,
+  onDelete,
+  onDuplicate,
+}: {
+  row: IbadahRow;
+  onEdit: () => void;
+  onDelete: () => void;
+  onDuplicate: () => void;
+}) {
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-2">
+      <div className="flex items-start justify-between">
+        <div>
+          <span className="inline-block px-2 py-0.5 text-xs font-semibold text-indigo-700 bg-indigo-100 rounded-full">
+            {row.bulan}
+          </span>
+        </div>
+        <div className="flex items-center gap-1">
+          <button onClick={onEdit} className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg">
+            <Edit2 size={14} />
+          </button>
+          <button onClick={onDuplicate} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg">
+            <Copy size={14} />
+          </button>
+          <button onClick={onDelete} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg">
+            <Trash2 size={14} />
+          </button>
+        </div>
+      </div>
+      <CardField label="Tanggal" value={row.tanggal} />
+      <CardField label="Pelayan Ibadah" value={row.pelayan_ibadah} />
+      <CardField label="Pemberita Firman" value={row.pemberita_firman} />
+      <CardField label="Tema Ibadah Bulanan" value={row.tema_ibadah_bulanan} />
+      <CardField label="Nas Alkitab" value={row.nas_alkitab} />
+    </div>
+  );
+}
+
+function HMCard({
+  row,
+  onEdit,
+  onDelete,
+  onDuplicate,
+}: {
+  row: HolyMorningRow;
+  onEdit: () => void;
+  onDelete: () => void;
+  onDuplicate: () => void;
+}) {
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-2">
+      <div className="flex items-start justify-between">
+        <div>
+          <span className="inline-block px-2 py-0.5 text-xs font-semibold text-indigo-700 bg-indigo-100 rounded-full">
+            {row.bulan}
+          </span>
+        </div>
+        <div className="flex items-center gap-1">
+          <button onClick={onEdit} className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg">
+            <Edit2 size={14} />
+          </button>
+          <button onClick={onDuplicate} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg">
+            <Copy size={14} />
+          </button>
+          <button onClick={onDelete} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg">
+            <Trash2 size={14} />
+          </button>
+        </div>
+      </div>
+      <CardField label="Tanggal" value={row.tanggal} />
+      <CardField label="Christian Worldview" value={row.christian_worldview} />
+      <CardField label="Profil" value={row.profil} />
+      <CardField label="Bestra" value={row.bestra} />
+      <CardField label="Karakter" value={row.karakter} />
+      <CardField label="Tema Bulanan" value={row.tema_bulanan} />
+      <CardField label="Tema Mingguan" value={row.tema_mingguan} />
+      <CardField label="Nas Alkitab" value={row.nas_alkitab} />
+      <CardField label="Tujuan" value={row.tujuan} />
+      <CardField label="Pelayan Holy Morning" value={row.pelayan_holy_morning} />
+      <CardField label="Keterangan" value={row.keterangan} />
+    </div>
+  );
+}
+
+function CardField({ label, value }: { label: string; value: string | null | undefined }) {
+  return (
+    <div className="flex gap-2">
+      <span className="text-xs text-gray-400 min-w-[120px] shrink-0">{label}</span>
+      <span className="text-sm text-gray-700">{value || '—'}</span>
+    </div>
+  );
+}
+
+function EmptyCard() {
+  return (
+    <div className="py-12 text-center text-gray-400">
+      <FileSpreadsheet size={40} className="mx-auto mb-3 opacity-40" />
+      <p className="text-sm">Belum ada data</p>
+    </div>
+  );
+}
+
+/* ─── Sub-Components: Forms ──────────────────────────────────────────────── */
+
+function IbadahFormContent({
+  form,
+  onChange,
+  onSave,
+  onCancel,
+  saving,
+  isEdit,
+}: {
+  form: IbadahForm;
+  onChange: (f: IbadahForm) => void;
+  onSave: () => void;
+  onCancel: () => void;
+  saving: boolean;
+  isEdit: boolean;
+}) {
+  const update = (field: keyof IbadahForm, value: string) =>
+    onChange({ ...form, [field]: value });
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Select
+          label="Bulan"
+          value={form.bulan}
+          onChange={(e) => update('bulan', e.target.value)}
+          options={BULAN_OPTIONS.map((b) => ({ value: b, label: b }))}
+          placeholder="Pilih bulan"
+        />
+        <Input
+          label="Tanggal"
+          value={form.tanggal}
+          onChange={(e) => update('tanggal', e.target.value)}
+          placeholder="contoh: 12 Juli 2026 HUT SKL"
+        />
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Input
+          label="Pelayan Ibadah"
+          value={form.pelayan_ibadah}
+          onChange={(e) => update('pelayan_ibadah', e.target.value)}
+          placeholder="contoh: GKI dan SKL"
+        />
+        <Input
+          label="Pemberita Firman"
+          value={form.pemberita_firman}
+          onChange={(e) => update('pemberita_firman', e.target.value)}
+          placeholder="contoh: Ev. Ratnajani Muljadi S.Th"
+        />
+      </div>
+      <Input
+        label="Tema Ibadah Bulanan"
+        value={form.tema_ibadah_bulanan}
+        onChange={(e) => update('tema_ibadah_bulanan', e.target.value)}
+        placeholder="contoh: HOLY THOUGHT FOR GOD"
+      />
+      <Input
+        label="Nas Alkitab"
+        value={form.nas_alkitab}
+        onChange={(e) => update('nas_alkitab', e.target.value)}
+        placeholder="contoh: PHIL. 4:8"
+      />
+      <Textarea
+        label="Catatan"
+        value={form.catatan}
+        onChange={(e) => update('catatan', e.target.value)}
+        placeholder="Catatan tambahan (opsional)"
+        rows={2}
+      />
+      <div className="flex justify-end gap-3 pt-2">
         <button
-          onClick={goToList}
+          onClick={onCancel}
           disabled={saving}
-          className="px-4 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+          className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
         >
           Batal
         </button>
         <button
-          onClick={handleSubmit}
+          onClick={onSave}
           disabled={saving}
-          className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50"
         >
-          {saving && <Loader2 size={14} className="animate-spin" />}
-          {saving ? 'Menyimpan...' : editingJadwal ? 'Simpan Perubahan' : 'Simpan Jadwal'}
+          {saving && <Loader2 size={16} className="animate-spin" />}
+          {isEdit ? 'Simpan Perubahan' : 'Tambah'}
         </button>
       </div>
-
-      {/* Confirm Dialog */}
-      <ConfirmDialog
-        open={confirmState.open}
-        onClose={() => setConfirmState((prev) => ({ ...prev, open: false, loading: false }))}
-        onConfirm={confirmState.onConfirm}
-        title={confirmState.title}
-        message={confirmState.message}
-        variant={confirmState.variant}
-        loading={confirmState.loading}
-        confirmText={confirmState.loading ? 'Memproses...' : 'Ya, Hapus'}
-        cancelText="Batal"
-      />
     </div>
   );
+}
 
-  // ── Main Render ────────────────────────────────────────────
+function HMFormContent({
+  form,
+  onChange,
+  onSave,
+  onCancel,
+  saving,
+  isEdit,
+}: {
+  form: HolyMorningForm;
+  onChange: (f: HolyMorningForm) => void;
+  onSave: () => void;
+  onCancel: () => void;
+  saving: boolean;
+  isEdit: boolean;
+}) {
+  const update = (field: keyof HolyMorningForm, value: string) =>
+    onChange({ ...form, [field]: value });
+
   return (
-    <div className="space-y-6">
-      {view === 'list' && renderListView()}
-      {view === 'detail' && renderDetailView()}
-      {view === 'form' && renderFormView()}
-
-      {/* Confirm Dialog (for list/detail views) */}
-      {view !== 'form' && (
-        <ConfirmDialog
-          open={confirmState.open}
-          onClose={() => setConfirmState((prev) => ({ ...prev, open: false, loading: false }))}
-          onConfirm={confirmState.onConfirm}
-          title={confirmState.title}
-          message={confirmState.message}
-          variant={confirmState.variant}
-          loading={confirmState.loading}
-          confirmText={confirmState.loading ? 'Memproses...' : 'Ya, Lanjutkan'}
-          cancelText="Batal"
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Select
+          label="Bulan"
+          value={form.bulan}
+          onChange={(e) => update('bulan', e.target.value)}
+          options={BULAN_OPTIONS.map((b) => ({ value: b, label: b }))}
+          placeholder="Pilih bulan"
         />
-      )}
+        <Input
+          label="Tanggal"
+          value={form.tanggal}
+          onChange={(e) => update('tanggal', e.target.value)}
+          placeholder="contoh: Senin, 6 Juli 2026"
+        />
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <Input
+          label="Christian Worldview"
+          value={form.christian_worldview}
+          onChange={(e) => update('christian_worldview', e.target.value)}
+          placeholder="Christian Worldview"
+        />
+        <Input
+          label="Profil"
+          value={form.profil}
+          onChange={(e) => update('profil', e.target.value)}
+          placeholder="Profil"
+        />
+        <Input
+          label="Bestra"
+          value={form.bestra}
+          onChange={(e) => update('bestra', e.target.value)}
+          placeholder="Bestra"
+        />
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Input
+          label="Karakter"
+          value={form.karakter}
+          onChange={(e) => update('karakter', e.target.value)}
+          placeholder="Karakter"
+        />
+        <Input
+          label="Tema Bulanan"
+          value={form.tema_bulanan}
+          onChange={(e) => update('tema_bulanan', e.target.value)}
+          placeholder="Tema Bulanan"
+        />
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Input
+          label="Tema Mingguan"
+          value={form.tema_mingguan}
+          onChange={(e) => update('tema_mingguan', e.target.value)}
+          placeholder="Tema Mingguan"
+        />
+        <Input
+          label="Nas Alkitab"
+          value={form.nas_alkitab}
+          onChange={(e) => update('nas_alkitab', e.target.value)}
+          placeholder="contoh: PHIL. 4:8"
+        />
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Input
+          label="Tujuan"
+          value={form.tujuan}
+          onChange={(e) => update('tujuan', e.target.value)}
+          placeholder="Tujuan"
+        />
+        <Input
+          label="Pelayan Holy Morning"
+          value={form.pelayan_holy_morning}
+          onChange={(e) => update('pelayan_holy_morning', e.target.value)}
+          placeholder="Pelayan Holy Morning"
+        />
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Input
+          label="Keterangan"
+          value={form.keterangan}
+          onChange={(e) => update('keterangan', e.target.value)}
+          placeholder="Keterangan"
+        />
+      </div>
+      <Textarea
+        label="Catatan"
+        value={form.catatan}
+        onChange={(e) => update('catatan', e.target.value)}
+        placeholder="Catatan tambahan (opsional)"
+        rows={2}
+      />
+      <div className="flex justify-end gap-3 pt-2">
+        <button
+          onClick={onCancel}
+          disabled={saving}
+          className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+        >
+          Batal
+        </button>
+        <button
+          onClick={onSave}
+          disabled={saving}
+          className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+        >
+          {saving && <Loader2 size={16} className="animate-spin" />}
+          {isEdit ? 'Simpan Perubahan' : 'Tambah'}
+        </button>
+      </div>
     </div>
   );
 }
