@@ -18,12 +18,14 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
+  CalendarClock,
 } from "lucide-react";
 import { useState } from "react";
 
 const menuItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/kaldik", label: "Kaldik", icon: CalendarDays },
+  { href: "/jadwal", label: "Jadwal", icon: CalendarClock },
   { href: "/tema-bulanan", label: "Tema Bulanan", icon: Palette },
   { href: "/perlu-cek", label: "Perlu Cek", icon: AlertCircle },
   { href: "/tanpa-tanggal", label: "Tanpa Tanggal", icon: CalendarOff },

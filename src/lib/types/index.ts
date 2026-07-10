@@ -235,3 +235,40 @@ export interface DashboardSummary {
   agendaTerdekat: Kaldik[];
   lastSync: SyncLog | null;
 }
+
+// ============================================================
+// Jadwal Types
+// ============================================================
+
+export interface Jadwal {
+  id: string;
+  jadwal_id: string;
+  nama_jadwal: string;
+  unit_id: string;
+  tahun_ajaran: string;
+  semester: number;
+  keterangan: string;
+  catatan: string;
+  status: string;
+  spreadsheet_row_id: number | null;
+  created_at: string;
+  updated_at: string;
+  unit?: Unit;
+  items?: JadwalItem[];
+}
+
+export interface JadwalItem {
+  id: string;
+  jadwal_id: string;
+  hari: string;
+  jam_mulai: string;
+  jam_selesai: string;
+  nama_slot: string;
+  mata_pelajaran: string;
+  pengajar: string;
+  ruangan: string;
+  warna: string;
+  urutan: number;
+  created_at: string;
+  updated_at: string;
+}
